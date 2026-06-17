@@ -63,7 +63,70 @@
 - **二、** 前向传播与计算图构建
 - **三、** 反向传播（backward）
 - **四、** 叶子节点 vs 非叶子节点
-- **五、** 本章总结
+- **五、** detach 分离张量（切断梯度计算）
+- **六、** detach 对梯度计算的影响（进阶验证）
+- **七、** detach vs data（推荐的分离方式）
+- **八、** 本章总结
+
+### 第八部分：线性回归实战案例
+- **一、** 整体思路与流程
+- **二、** 准备数据（生成样本 + Dataset + DataLoader）
+- **三、** 定义模型、损失函数与优化器
+- **四、** 模型训练（五步核心流程）
+- **五、** 记录损失与画图
+- **六、** 调参优化与效果对比
+- **七、** 本章总结 + 完整代码
+
+### 第九部分：激活函数（Activation Functions）
+- **一、** 为什么需要激活函数？
+- **二、** Sigmoid（S 型曲线 + 自动求导画图）
+- **三、** Tanh（双曲正切 + 对比 Sigmoid）
+- **四、** ReLU（深度网络首选 + 不可导点的处理）
+- **五、** Softmax（多分类概率转换 + dim 参数详解）
+- **六、** 本章总结 + 对比速查表
+
+### 第十部分：全连接层与参数初始化
+- **一、** 全连接层（nn.Linear）详解
+- **二、** weight 和 bias 的形状与含义
+- **三、** 常数初始化（zeros / ones / constant / eye）
+- **四、** 随机初始化（normal / uniform）
+- **五、** 工程初始化（Xavier / Kaiming）
+- **六、** 默认初始化机制
+- **七、** 本章总结 + 速查表
+
+### 第十一部分：自定义神经网络模型
+- **一、** nn.Module 基类（所有网络的基石）
+- **二、** 搭建三层神经网络（3→4 Tanh → 4 ReLU → 2 Softmax）
+- **三、** 参数初始化实践（Xavier + Kaiming 组合）
+- **四、** Dropout 正则化（随机关闭神经元）
+- **五、** 查看模型参数（4种方法）
+- **六、** 查看模型结构与参数数量（torchsummary）
+- **七、** 本章总结 + 完整代码
+
+### 第十二部分：设备管理（device）与 Sequential 快捷搭建
+- **一、** 什么是设备（device）？CPU vs GPU
+- **二、** 创建张量时指定设备
+- **三、** 迁移设备 — `to()` 方法
+- **四、** 将模型迁移到 GPU
+- **五、** 设备统一管理（全局变量 + is_available）
+- **六、** Sequential 顺序容器（快捷搭建神经网络）
+- **七、** Sequential 的参数初始化（apply 方法）
+- **八、** 本章总结 + 完整代码
+
+### 第十三部分：损失函数（Loss Functions）
+- **一、** 分类任务 vs 回归任务
+- **二、** 二分类损失 — BCE Loss（二元交叉熵）
+- **三、** 多分类损失 — CrossEntropyLoss（交叉熵 + Softmax）
+- **四、** 回归损失 — MSE / MAE / Smooth L1
+- **五、** 本章总结 + 选择指南
+
+### 第十四部分：优化方法（Optimizers）
+- **一、** 优化器概述
+- **二、** SGD + Momentum（动量法）
+- **三、** 学习率衰减（StepLR / MultiStepLR / ExponentialLR）
+- **四、** 自适应学习率（AdaGrad / RMSProp）
+- **五、** Adam 与 AdamW（工程首选）
+- **六、** 本章总结 + 选择指南
 
 ---
 
@@ -3209,4 +3272,3010 @@ print(f"B.grad = {B.grad}")
 
 ---
 
+## 📌 五、detach 分离张量（切断梯度计算）
+
+### 为什么要 detach？
+
+在训练神经网络时，计算图中的中间结果（包括最终的 loss）往往不只是"算完就放那"——我们可能还要拿它做比较、累加、可视化等**额外操作**。
+
+问题来了：如果所有操作都开启了梯度追踪，这些额外操作也会被纳入计算图，反向传播时就会**干扰原始的梯度计算**。
+
+> 💡 **直觉理解**：想象你修了一条水管（计算图），水流（梯度）要沿着管子回流。但你在管子中间又接了一根分支管去做别的事——这根分支管的水流会干扰主干的水压。`detach` 就是把分支管**封死**，让它不影响主干。
+
+### detach 是什么？
+
+`detach()` 会返回一个**新的张量**，和原始张量**数值完全相同**，但：
+- ❌ **丢失** `grad_fn`（不知道自己是怎么算出来的）
+- ❌ **关闭** `requires_grad`（不再追踪梯度）
+
+```
+原始张量 X ──→ detach() ──→ 新张量 Y
+  │                              │
+  │ requires_grad=True          │ requires_grad=False
+  │ grad_fn = ...               │ grad_fn = None
+  │ 数值 = 2.0                  │ 数值 = 2.0（一样！）
+```
+
+### 代码演示
+
+```python
+import torch
+
+# 定义叶子节点 X，开启梯度追踪
+X = torch.tensor(2.0, requires_grad=True)
+
+# 用 detach 分离出 Y
+Y = X.detach()
+
+# 对比 X 和 Y
+print(X)              # tensor(2., requires_grad=True)
+print(Y)              # tensor(2.)
+print(Y.requires_grad) # False  ← 梯度开关已关闭！
+```
+
+### detach 出来的 Y 和 X 是什么关系？
+
+| 属性 | X | Y（detach 出来） |
+|------|---|-----------------|
+| **数值** | 2.0 | 2.0 ✅ 相同 |
+| **requires_grad** | True | False ❌ 不同 |
+| **grad_fn** | None（叶子） | None ❌ 不同 |
+| **是否同一对象** | — | ❌ 不同（`id()` 不同） |
+| **底层数据存储** | — | ✅ 共享（`data_ptr()` 相同） |
+
+> ⚠️ **注意**：X 和 Y 是**不同的对象**，但**共享底层数据**。不过由于 X 是叶子节点且开启了梯度，所以**不能对 X 做原地修改**（in-place operation）。
+
+### detach 在计算图中的效果
+
+```python
+import torch
+
+X = torch.tensor(2.0, requires_grad=True)
+Y = X.detach()   # Y 被分离，梯度追踪关闭
+
+# 两条分支分别做平方运算
+Z1 = X ** 2      # 基于 X → 有梯度追踪
+Z2 = Y ** 2      # 基于 Y → 无梯度追踪
+
+print(Z1.requires_grad)  # True
+print(Z2.requires_grad)  # False
+print(Z1.grad_fn)        # PowBackward0
+print(Z2.grad_fn)        # None
+
+# Z1 可以反向传播
+Z1.backward()
+print(X.grad)  # tensor(4.)  ← 2X = 2×2 = 4 ✅
+
+# Z2 不能反向传播！
+# Z2.backward()  ← ❌ 报错！没有 grad_fn
+```
+
+**关键结论**：即使 Y 是从 X 分离出来的，Y 后续的操作**完全不影响** X 的梯度计算。X 的梯度仍然是 4，和没有 Y 这条分支时**完全一样**。
+
+> 🎯 **一句话总结**：`detach()` 把张量从计算图中"摘"出来，之后它做的任何操作都不会影响原始计算图的梯度。
+
+---
+
+## 📌 六、detach 对梯度计算的影响（进阶验证）
+
+### 更复杂的场景
+
+上面是简单案例，再看一个更复杂的：**detach 出来的结果又参与了后续计算**。
+
+```
+计算图结构：
+
+    X（叶子，requires_grad=True）
+    │
+    ├──→ Y = X²（正常计算）
+    │      │
+    │      └──→ U = Y.detach()（分离，关闭梯度）
+    │             │
+    │             └──→ Z = U × X（U 作为常数参与）
+    │
+    └────────────────────────→（X 也直接参与 Z 的计算）
+```
+
+数学上：`Z = U × X`，而 `U = X²`（数值上），所以 `Z = X³`？
+
+**不是！** 因为 U 是 detach 出来的，它被当成**常数**，所以：
+- `Z = U × X`（U 是常数）
+- `∂Z/∂X = U`（把 U 当常数求导）
+
+### 代码验证
+
+```python
+import torch
+
+# 定义 2×2 全一矩阵，开启梯度
+X = torch.ones(2, 2, requires_grad=True)
+
+# Y = X²
+Y = X ** 2
+print(Y)
+# tensor([[1., 1.],
+#         [1., 1.]], grad_fn=<PowBackward0>)
+
+# U = Y.detach()，分离出来
+U = Y.detach()
+print(U.requires_grad)  # False
+print(U.grad_fn)        # None
+
+# Z = U × X
+Z = U * X
+print(Z.requires_grad)  # True  ← 只要有一个输入开了梯度，结果就是 True
+print(Z.grad_fn)        # <MulBackward0>
+```
+
+### 反向传播的注意点
+
+```python
+# ❌ Z 是矩阵，不能直接 backward！
+# Z.backward()  ← 报错：grad can be implicitly created only for scalar outputs
+
+# ✅ 先求和变成标量，再 backward
+Z.sum().backward()
+
+# 查看梯度
+print(X.grad)
+# tensor([[1., 1.],
+#         [1., 1.]])  ← 就是 U 的值！
+```
+
+### 为什么梯度是全 1？
+
+| 情况 | 公式 | 对 X 求导 | X=1 时的梯度 |
+|------|------|-----------|-------------|
+| **U 当常数**（detach） | Z = U × X | ∂Z/∂X = **U** | U = [[1,1],[1,1]] |
+| **U 不 detach**（正常） | Z = X² × X = X³ | ∂Z/∂X = **3X²** | 3×1 = [[3,3],[3,3]] |
+
+验证一下不用 detach 的情况：
+
+```python
+X = torch.ones(2, 2, requires_grad=True)
+Y = X ** 2
+Z = Y * X        # 不 detach，直接用 Y
+Z.sum().backward()
+print(X.grad)
+# tensor([[3., 3.],
+#         [3., 3.]])  ← 3X² = 3×1 = 3 ✅
+```
+
+> 🎯 **核心结论**：`detach` 出来的张量在后续计算中被当成**常数**，不会把它的"来源"带入梯度计算。这就是 detach 对梯度计算的影响。
+
+### 速查对比
+
+| 操作 | `requires_grad` | `grad_fn` | 对上游梯度的影响 |
+|------|:-:|:-:|------|
+| `X`（原始） | ✅ True | None（叶子） | 正常传递 |
+| `Y = X.detach()` | ❌ False | ❌ None | **完全切断** |
+| `Z = Y * X` | ✅ True | MulBackward0 | Y 分支不回传，只从 X 分支回传 |
+
+---
+
+## 📌 七、detach vs data（推荐的分离方式）
+
+### 两个看起来一样的东西
+
+你可能会想：之前说 `detach` 的本质是把数据拿出来，其他属性全扔掉。那 `Y.data` 不就是 Y 的底层数据吗？**二者有什么区别？**
+
+```python
+import torch
+
+X1 = torch.tensor([1.0, 2.0, 3.0], requires_grad=True)
+X2 = torch.tensor([1.0, 2.0, 3.0], requires_grad=True)
+
+# 模拟神经网络：经过激活函数
+Y1 = X1.sigmoid()
+Y2 = X2.sigmoid()
+
+# 两种方式"分离"数据
+Z1 = Y1.data       # ① 直接取底层 data 属性
+Z2 = Y2.detach()   # ② 用 detach 方法
+
+print(Z1)  # tensor([0.7311, 0.8808, 0.9526])
+print(Z2)  # tensor([0.7311, 0.8808, 0.9526])
+print(Z1.requires_grad)  # False
+print(Z2.requires_grad)  # False
+```
+
+**表面上看完全一样**：数据相同、都不追踪梯度、都没有 grad_fn。甚至底层内存也是共享的。
+
+### 但二者的本质区别
+
+> 🏭 **仓库管理员比喻**：
+> - `Y.data` → 你**偷偷钻到仓库里**，直接修改底层货物（data）。仓库管理员（autograd 引擎）**完全不知情**。
+> - `Y.detach()` → 你**先跟管理员打报告**：我分离了一份出来，我要改它。管理员记录在案。
+
+这个区别在**你不修改分离后的数据**时看不出来，但一旦你**改了底层数据**，后果截然不同。
+
+### 危险实验：修改分离后的数据
+
+```python
+# 模拟神经网络
+X1 = torch.tensor([1.0, 2.0, 3.0], requires_grad=True)
+X2 = torch.tensor([1.0, 2.0, 3.0], requires_grad=True)
+
+Y1 = X1.sigmoid()  # 前向传播
+Y2 = X2.sigmoid()
+
+# 用两种方式分离
+Z1 = Y1.data        # data 属性
+Z2 = Y2.detach()    # detach 方法
+
+# ⚠️ 修改分离出来的数据（原地操作）
+Z1.zero_()          # Y1.data 全部改成 0
+Z2.zero_()          # Y2.detach() 全部改成 0
+
+# 因为内存共享，Y1 和 Y2 的数据也被改了！
+print(Y1)  # tensor([0., 0., 0.], grad_fn=<SigmoidBackward0>)
+print(Y2)  # tensor([0., 0., 0.], grad_fn=<SigmoidBackward0>)
+```
+
+### 反向传播时的致命差异
+
+```python
+# ⚠️ 注意：先关闭 data 修改后的梯度计算
+# Y1.sum().backward()
+# print(X1.grad)  # ✅ 能算！但结果是 tensor([0., 0., 0.])
+#                 # 因为 Y1 数据全变 0，梯度也是 0
+#                 # 你以为是正确的，其实已经乱了！
+
+# Y2.sum().backward()
+# print(X2.grad)  # ❌ 直接报错！
+# RuntimeError: one of the variables needed for gradient computation
+# has been modified by an inplace operation
+```
+
+| 方式 | 修改底层数据后反向传播 | 结果 |
+|------|----------------------|------|
+| **`Y.data`** | ✅ 能算 | 算出**错误梯度**，毫无警告 ❌ 极危险 |
+| **`Y.detach()`** | ❌ 报错 | 直接报错提醒你修过数据 ✅ 安全 |
+
+> ⚠️ **为什么 data 更危险？**
+>
+> 你用 `data` 改了底层数据，autograd 引擎完全不知道。它以为一切正常，**默默地算出错误的梯度**。你发现不了，训练出来的模型就废了。
+>
+> 而 `detach` 分离出来的变量被 autograd **跟踪管理**，你改了它，autograd 知道，反向传播时**直接报错叫停**，提醒你代码有 bug。
+
+### 总结对比
+
+| 对比维度 | `Y.data`（属性） | `Y.detach()`（方法） |
+|---------|:---------------:|:------------------:|
+| 返回类型 | 张量 | 张量 |
+| 共享底层数据 | ✅ 是 | ✅ 是 |
+| 关闭 `requires_grad` | ✅ 是 | ✅ 是 |
+| 丢失 `grad_fn` | ✅ 是 | ✅ 是 |
+| **被 autograd 跟踪** | ❌ 否 | ✅ **是** |
+| 修改后反向传播 | 能算但结果错误 ❌ | 直接报错 ✅ |
+| **推荐使用** | ❌ 不推荐 | ✅ **官方推荐** |
+
+> 🎯 **一句话结论**：分离张量**永远用 `detach()`** 而不是 `.data`。除非你 100% 确定不会修改分离出来的数据，否则 `.data` 可能悄无声息地毁掉你的训练结果。
+
+---
+
+## 📝 本章总结（自动微分完整版）
+
+### 🌳 知识树
+
+```
+PyTorch 自动微分（Autograd）
+│
+├── ① 基础概念
+│   ├── requires_grad → 梯度追踪开关
+│   ├── .grad → 存储梯度值
+│   └── .grad_fn → 记录计算来源
+│
+├── ② 计算图
+│   ├── 动态构建（边算边搭）
+│   ├── 叶子节点 vs 非叶子节点
+│   └── 反向后自动释放
+│
+├── ③ 反向传播
+│   ├── backward() → 从标量开始
+│   ├── 链式求导法则
+│   └── 梯度累积 → 需 zero_grad()
+│
+├── ④ 梯度管理
+│   ├── retain_grad() → 保留非叶子梯度
+│   └── optimizer.zero_grad() → 清空
+│
+└── ⑤ detach 分离
+│   ├── 返回新张量，数值相同
+│   ├── 关闭 requires_grad
+│   ├── 丢失 grad_fn
+│   ├── 底层数据共享（data_ptr 相同）
+│   ├── 后续计算中被当成常数
+│   └──
+└── ⑥ detach vs data
+    ├── 表面一样：数据相同、不追踪梯度
+    ├── data 修改后反向传播 → 无声算出错误梯度 ❌
+    ├── detach 修改后反向传播 → 直接报错 ✅
+    └── 推荐：永远用 detach()
+```
+
+### 关键概念速查表
+
+| 概念 | 一句话解释 |
+|------|-----------|
+| **`requires_grad`** | 是否开启梯度追踪，参数设为 True |
+| **`.grad`** | 存储计算出的梯度（叶子节点） |
+| **`.grad_fn`** | 记录张量是由什么运算得到的 |
+| **`backward()`** | 从损失开始反向传播，自动算梯度 |
+| **叶子节点** | 初始定义的张量，梯度会保留 |
+| **非叶子节点** | 中间计算结果，梯度自动释放 |
+| **`retain_grad()`** | 强制保留非叶子节点的梯度 |
+| **动态计算图** | 边计算边构建，灵活易调试 |
+| **梯度累积** | 叶子节点梯度多次反向会叠加，需清零 |
+| **`detach()`** | 分离张量，切断梯度追踪，后续视为常数 |
+| **`.data`（属性）** | 取出底层数据，**不被 autograd 跟踪**，修改后反向传播无警告 — ❌ 不推荐 |
+| **detach vs data** | 都能分离数据，但 `detach` 被 autograd 跟踪更安全，`data` 可能无声产生错误梯度 |
+
+### 自动微分的完整流程（必记！）
+
+```python
+import torch
+import torch.nn as nn
+
+# ① 定义数据
+X = torch.tensor(10.0)
+Y = torch.tensor(3.0)
+
+# ② 初始化参数（开启梯度）
+W = torch.randn(1, 1, requires_grad=True)
+B = torch.randn(1, 1, requires_grad=True)
+
+# ③ 前向传播
+Z = W * X + B
+loss_fn = nn.MSELoss()
+loss = loss_fn(Z, Y)
+
+# ④ 反向传播 ⭐
+loss.backward()
+
+# ⑤ 查看梯度
+print(f"W.grad = {W.grad}")
+print(f"B.grad = {B.grad}")
+
+# ⑥ 清空梯度（下次迭代前）
+# optimizer.zero_grad()  ← 后面学
+```
+
+---
+
 > **下一篇预告**：接下来是**神经网络模块（torch.nn）**——用 PyTorch 搭建真正的神经网络模型！
+
+---
+
+# 🧠 第八部分：线性回归实战案例
+
+> 📺 视频来源：PyTorch 线性回归案例 · 完整流程
+> 🎯 核心目标：用神经网络实现线性回归，跑通训练全流程
+> 📝 风格：完整代码 + 逐行讲解
+
+---
+
+## 📌 一、整体思路与流程
+
+### 从理论到实战
+
+前面我们学完了 PyTorch 的基础操作和自动微分，现在来做第一个**完整的实战项目**——**线性回归**。
+
+> 💡 线性回归本质上就是 `Y = WX + B`，而神经网络的一个全连接层（Linear Layer）做的也是 `Y = XWᵀ + B`。所以用一个**单层神经网络**就能实现线性回归！
+
+### 完整训练流程
+
+```
+① 准备数据 ──→ ② 构建模型 ──→ ③ 定义损失函数和优化器
+                                              ↓
+              ⑥ 迭代训练 ←──────────────────── ④ 前向传播计算输出
+                  ↓                                    ↓
+              ⑦ 调参优化                            ⑤ 计算损失
+                  ↓                                    ↓
+              ⑧ 画图看效果                          ⭐ 反向传播
+                                                       ↓
+                                                   更新参数
+```
+
+### 核心五步（每一轮每批数据都要做）
+
+| 步骤 | 代码 | 说明 |
+|------|------|------|
+| ① 前向传播 | `y_pred = model(x)` | 算预测值 |
+| ② 计算损失 | `loss = loss_fn(y_pred, y)` | 算预测和真实差距 |
+| ③ 反向传播 | `loss.backward()` | 算所有参数的梯度 |
+| ④ 更新参数 | `optimizer.step()` | 用梯度更新 W 和 B |
+| ⑤ 梯度清零 | `optimizer.zero_grad()` | 清掉旧梯度，准备下一轮 |
+
+---
+
+## 📌 二、准备数据
+
+### 2.1 生成随机样本数据
+
+我们不知道真实的线性数据长什么样，那就**自己编**一个：
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import TensorDataset, DataLoader
+
+# ─── ① 生成随机样本点 ───
+# 100个随机点，每个点1个特征
+X = torch.randn(100, 1)
+
+# 预设真实参数（这是"本质规律"）
+w_real = torch.tensor([2.5])   # 斜率
+b_real = torch.tensor([5.2])   # 截距
+
+# 随机噪声（让点不在直线上，更真实）
+noise = torch.randn(100, 1) * 0.1
+
+# 真实目标值 Y = WX + B + noise
+Y = X @ w_real + b_real + noise
+```
+
+> 🎯 **理解**：我们假装 `Y = 2.5X + 5.2` 是真实规律，然后加了一点随机抖动。模型训练的目的就是**从数据中反推**这个 W 和 B。
+
+### 2.2 构建 Dataset 和 DataLoader
+
+```python
+# ─── ② 构建数据集 ───
+dataset = TensorDataset(X, Y)   # 把 X,Y 打包成数据集
+
+# ─── ③ 构建数据加载器 ───
+dataloader = DataLoader(
+    dataset=dataset,
+    batch_size=10,    # 每批10个样本
+    shuffle=True      # 每轮都打乱数据
+)
+```
+
+| 概念 | 说明 |
+|------|------|
+| **`TensorDataset`** | 把 X 和 Y 打包成 (特征, 标签) 对 |
+| **`DataLoader`** | 自动按 batch_size 切分、打乱、迭代 |
+| **`shuffle=True`** | 每个 epoch 开始前自动洗牌，引入随机性 |
+
+---
+
+## 📌 三、定义模型、损失函数与优化器
+
+### 3.1 模型：一个线性层（全连接层）
+
+```python
+# ─── ④ 定义模型 ───
+model = nn.Linear(in_features=1, out_features=1)
+```
+
+> 💡 `nn.Linear(1, 1)` 表示输入1个特征，输出1个值。内部自动创建了权重 `W`（1×1）和偏置 `B`（1），这正是 `Y = WX + B`。
+
+### 3.2 损失函数：均方误差 MSE
+
+```python
+# ─── ⑤ 定义损失函数 ───
+loss_fn = nn.MSELoss()   # 回归问题的标配
+```
+
+### 3.3 优化器：随机梯度下降 SGD
+
+```python
+# ─── ⑥ 定义优化器 ───
+optimizer = optim.SGD(model.parameters(), lr=0.001)
+```
+
+| 组件 | 代码 | 作用 |
+|------|------|------|
+| 模型 | `nn.Linear(1, 1)` | `Y = WX + B` 的结构 |
+| 损失函数 | `nn.MSELoss()` | 衡量预测值和真实值的差距 |
+| 优化器 | `optim.SGD(...)` | 如何用梯度更新参数（学习率控制步长） |
+
+---
+
+## 📌 四、模型训练（五步核心流程）
+
+### 双重循环结构
+
+```python
+# ─── ⑦ 模型训练 ───
+epochs = 100
+
+for epoch in range(epochs):           # 外层：遍历轮次
+    for x_batch, y_batch in dataloader:  # 内层：遍历每批数据
+
+        # ① 前向传播（计算预测值）
+        y_pred = model(x_batch)
+
+        # ② 计算损失
+        loss = loss_fn(y_pred, y_batch)
+
+        # ③ 反向传播（计算梯度）⭐
+        loss.backward()
+
+        # ④ 更新参数（梯度下降）
+        optimizer.step()
+
+        # ⑤ 梯度清零（清掉本轮梯度，准备下批）⭐
+        optimizer.zero_grad()
+
+# 查看训练后的参数
+print(f"斜率 W: {model.weight.item():.4f}")
+print(f"截距 B: {model.bias.item():.4f}")
+```
+
+### 五步流程详解
+
+| 步骤 | 代码 | 通俗理解 | 类比 |
+|------|------|---------|------|
+| ① 前向传播 | `y_pred = model(x)` | 用当前参数算预测值 | 猜测一下答案 |
+| ② 计算损失 | `loss = loss_fn(y_pred, y)` | 预测值和真实值差多少 | 看看错了多少 |
+| ③ 反向传播 | `loss.backward()` | 自动算每个参数的梯度 | 找改进方向 |
+| ④ 更新参数 | `optimizer.step()` | 按梯度方向更新 W 和 B | 往前走一步 |
+| ⑤ 梯度清零 | `optimizer.zero_grad()` | 清空旧梯度，用新的 | 清空小黑板 |
+
+> ⚠️ **梯度清零的位置**：可以在反向传播**前**或**后**，但**绝不能**插在 ③ 和 ④ 之间（否则刚算的梯度就被清了，更新了个寂寞）。
+
+### 首次训练效果
+
+训练 100 轮，学习率 0.001 后的结果：
+```
+斜率 W: 1.86    ← 目标 2.5，还差不少
+截距 B: 4.43    ← 目标 5.2，也差不少
+```
+
+**为什么不准？** 学习率太小 + 轮数不够。下面我们画图看看问题出在哪。
+
+---
+
+## 📌 五、记录损失与画图
+
+### 5.1 在训练中记录损失
+
+```python
+loss_history = []      # 记录每轮的平均损失
+
+for epoch in range(epochs):
+    total_loss = 0.0
+    num_batches = 0
+
+    for x_batch, y_batch in dataloader:
+        y_pred = model(x_batch)
+        loss = loss_fn(y_pred, y_batch)
+        total_loss += loss.item()   # 累加损失
+        num_batches += 1
+
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+    # 记录本轮平均损失
+    avg_loss = total_loss / num_batches
+    loss_history.append(avg_loss)
+```
+
+### 5.2 画两个子图
+
+```python
+import matplotlib.pyplot as plt
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+# 左图：损失下降曲线
+axes[0].plot(loss_history)
+axes[0].set_xlabel("Epoch")
+axes[0].set_ylabel("MSE Loss")
+
+# 右图：原始散点 + 拟合直线
+axes[1].scatter(X, Y)        # 原始数据点
+# 用训练好的模型画直线
+x_plot = torch.linspace(X.min(), X.max(), 100).reshape(-1, 1)
+y_plot = model(x_plot).detach()
+axes[1].plot(x_plot, y_plot, color='red', linewidth=2)
+axes[1].set_xlabel("X")
+axes[1].set_ylabel("Y")
+
+plt.show()
+```
+
+> 📊 左图看收敛：loss 不断下降说明模型在学习
+> 📊 右图看拟合：红色直线穿过散点的中心说明拟合成功
+
+---
+
+## 📌 六、调参优化与效果对比
+
+### 参数调整方案
+
+| 问题 | 解决方案 | 效果 |
+|------|---------|------|
+| 训练不足 | 增大 `epochs`（100 → 1000） | 更多训练，更好拟合 |
+| 学习率太小 | 增大 `lr`（0.001 → 0.01） | 更快收敛 |
+| 数据噪声大 | 调整 `noise` 系数 | 更真实或更清晰 |
+
+### 最佳效果示例
+
+```python
+# 调参后
+model = nn.Linear(1, 1)
+optimizer = optim.SGD(model.parameters(), lr=0.01)
+epochs = 1000
+```
+
+训练结果：
+```
+斜率 W: 2.5391    ← 接近真实 2.5 ✅
+截距 B: 5.1638    ← 接近真实 5.2 ✅
+```
+
+> ⚠️ 注意：因为有随机噪声，不可能完全等于 2.5 和 5.2。噪声越大，偏差越大，这是理论上的极限。
+
+### 损失下降曲线解读
+
+```
+loss
+│
+│   ╲
+│    ╲
+│     ╲_____  ← 约 100-200 轮时就已接近最小值
+│           ╲
+│            ╲____  ← 后面几乎水平
+│
+└───────────────────→ epoch
+```
+
+学习率 0.01 时大约 100~200 轮就收敛了，后面几乎是一条平线。这说明模型已经学得差不多了。
+
+---
+
+## 📝 本章总结 + 完整代码
+
+### 🌳 知识树
+
+```
+PyTorch 线性回归实战
+│
+├── ① 准备数据
+│   ├── 生成样本：X = randn, Y = WX + B + noise
+│   ├── TensorDataset：打包 X,Y
+│   └── DataLoader：自动分批 + 打乱
+│
+├── ② 构建模型
+│   ├── nn.Linear(1, 1) → Y = WX + B
+│   └── 一个全连接层就能实现线性回归
+│
+├── ③ 定义损失和优化器
+│   ├── nn.MSELoss() → 回归损失
+│   └── optim.SGD(model.parameters(), lr) → 梯度下降
+│
+├── ④ 训练五步（⭐ 核心）
+│   ├── y_pred = model(x)     前向传播
+│   ├── loss = loss_fn(...)   计算损失
+│   ├── loss.backward()       反向传播 → 算梯度
+│   ├── optimizer.step()      更新参数
+│   └── optimizer.zero_grad() 梯度清零
+│
+└── ⑤ 评估与可视化
+    ├── 记录 loss_history → 画损失曲线
+    ├── 画散点 + 拟合直线
+    └── 对比 W, B 与真实值
+```
+
+### 🔥 完整可运行代码
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import TensorDataset, DataLoader
+import matplotlib.pyplot as plt
+
+# ============ 1. 准备数据 ============
+X = torch.randn(100, 1)
+w_real, b_real = torch.tensor([2.5]), torch.tensor([5.2])
+noise = torch.randn(100, 1) * 0.1
+Y = X @ w_real + b_real + noise
+
+dataset = TensorDataset(X, Y)
+dataloader = DataLoader(dataset, batch_size=10, shuffle=True)
+
+# ============ 2. 构建模型 ============
+model = nn.Linear(1, 1)
+
+# ============ 3. 定义损失和优化器 ============
+loss_fn = nn.MSELoss()
+optimizer = optim.SGD(model.parameters(), lr=0.01)
+
+# ============ 4. 训练 ============
+epochs = 1000
+loss_history = []
+
+for epoch in range(epochs):
+    total_loss, num_batches = 0.0, 0
+
+    for x_batch, y_batch in dataloader:
+        # 前向传播
+        y_pred = model(x_batch)
+        # 计算损失
+        loss = loss_fn(y_pred, y_batch)
+        total_loss += loss.item()
+        num_batches += 1
+        # 反向传播
+        loss.backward()
+        # 更新参数
+        optimizer.step()
+        # 梯度清零
+        optimizer.zero_grad()
+
+    avg_loss = total_loss / num_batches
+    loss_history.append(avg_loss)
+
+# ============ 5. 评估 ============
+print(f"训练结果：W = {model.weight.item():.4f}, B = {model.bias.item():.4f}")
+print(f"真实值：  W = {w_real.item()}, B = {b_real.item()}")
+
+# 画图
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+axes[0].plot(loss_history)
+axes[0].set_xlabel("Epoch")
+axes[0].set_ylabel("MSE Loss")
+axes[0].set_title("Loss 下降曲线")
+
+axes[1].scatter(X, Y, alpha=0.6)
+x_plot = torch.linspace(X.min(), X.max(), 100).reshape(-1, 1)
+y_plot = model(x_plot).detach()
+axes[1].plot(x_plot, y_plot, 'r-', linewidth=2)
+axes[1].set_xlabel("X")
+axes[1].set_ylabel("Y")
+axes[1].set_title("拟合效果")
+
+plt.tight_layout()
+plt.show()
+```
+
+### 关键收获
+
+| 新概念 | 一句话解释 |
+|--------|-----------|
+| **`nn.Linear(in, out)`** | 全连接层，实现 `Y = XWᵀ + B` |
+| **`nn.MSELoss()`** | 均方误差损失，回归任务标配 |
+| **`optim.SGD(...)`** | 随机梯度下降优化器 |
+| **`optimizer.step()`** | 用梯度更新所有参数 |
+| **`optimizer.zero_grad()`** | 清空所有参数的梯度（防累积） |
+| **`TensorDataset`** | 把 X, Y 打包成数据集 |
+| **`DataLoader`** | 自动分批、打乱、迭代 |
+| **`model.parameters()`** | 获取模型所有可训练参数 |
+| **`model.weight` / `model.bias`** | 直接访问线性层的 W 和 B |
+
+> 🎯 现在你已经跑通了 PyTorch 训练的第一个完整项目！虽然很简单，但**训练流程在任何复杂的神经网络中都是一模一样的**：前向传播 → 算损失 → 反向传播 → 更新参数 → 梯度清零。
+
+---
+
+---
+
+# 🧠 第九部分：激活函数（Activation Functions）
+
+> 📺 视频来源：PyTorch 深度学习 · 激活函数详解
+> 🎯 核心目标：掌握四种常用激活函数及其在 PyTorch 中的使用
+> 📝 风格：图像可视化 + 自动求导验证 + 代码实践
+
+---
+
+## 📌 一、为什么需要激活函数？
+
+### 非线性的必要性
+
+如果神经网络只有线性层（`nn.Linear`），无论堆叠多少层：
+
+```
+Linear → Linear → Linear
+```
+
+最终结果**等价于一个线性层**（线性组合的线性组合还是线性组合）。
+
+> ❌ 没有激活函数 → 多层线性 = 单层线性 → **无法处理复杂问题**
+
+激活函数的作用就是**引入非线性**，让神经网络有能力学习复杂的模式。
+
+```
+Linear → 激活函数 → Linear → 激活函数 → ...
+```
+
+每一层"线性变换 + 非线性激活"的组合，才是真正的"深度"。
+
+### PyTorch 中的激活函数
+
+PyTorch 提供了两种使用方式：
+
+```python
+# 方式一：基于张量直接调用函数
+y = torch.sigmoid(x)     # 函数式
+y = x.sigmoid()          # 方法式（如 x.sum(), x.mean() 一样）
+
+# 方式二：作为神经网络层（后面会学）
+# nn.Sigmoid(), nn.Tanh(), nn.ReLU(), nn.Softmax()
+```
+
+> 💡 在本文中我们使用**方法一**，因为激活函数本质上就是逐元素运算，像加减乘除一样直接调就完了。
+
+---
+
+## 📌 二、Sigmoid（S 型曲线）
+
+### 2.1 表达式与图像
+
+```
+公式：σ(x) = 1 / (1 + e⁻ˣ)
+
+值域：(0, 1)    ← 输出可以看作概率
+中心：x=0 → σ(0) = 0.5
+```
+
+图像是一个 S 型曲线：
+- 在 x∈[-6, 6] 范围内变化明显
+- 在 x<-6 或 x>6 时几乎平了（梯度接近 0）
+
+### 2.2 导数
+
+```
+σ'(x) = σ(x) × (1 - σ(x))
+最大值：σ'(0) = 0.25
+```
+
+### 2.3 用 PyTorch + Autograd 画图（⭐ 重点）
+
+这是一种很有趣的方式：**直接利用反向传播自动计算导数**，而不需要手动写导函数表达式。
+
+```python
+import torch
+import matplotlib.pyplot as plt
+
+# ① 定义数据（开启梯度追踪）
+X = torch.linspace(-10, 10, 1000, requires_grad=True)
+
+# ② 前向传播：Sigmoid
+Y = torch.sigmoid(X)
+
+# ③ 反向传播：自动算导数
+Y.sum().backward()   # sum 让标量梯度 = 1，不改变导数
+
+# ④ 画图
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+# 左图：原函数
+axes[0].plot(X.detach().numpy(), Y.detach().numpy(), color='purple')
+axes[0].axhline(y=1, color='gray', alpha=0.5)
+axes[0].axhline(y=0.5, color='gray', alpha=0.5)
+axes[0].set_title("Sigmoid")
+
+# 右图：导函数（直接从梯度中取！）
+axes[1].plot(X.detach().numpy(), X.grad.numpy(), color='purple')
+axes[1].set_title("Sigmoid'")
+
+# 美化：去掉上、右边框
+for ax in [axes[0], axes[1]]:
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_position('zero')
+    ax.spines['bottom'].set_position('zero')
+
+plt.show()
+```
+
+> 🎯 **关键点**：`X.grad` 就是 Sigmoid 在每个 X 处的导数值！因为自动微分引擎已经帮我们算好了。
+
+### 2.4 Sigmoid 的优缺点
+
+| 优点 | 缺点 |
+|------|------|
+| ✅ 输出在 (0,1)，可解释为概率 | ❌ 梯度消失：导数最大值仅 0.25，深度网络中层层累乘 → 梯度几乎为 0 |
+| ✅ 光滑可导 | ❌ 不是关于原点对称（输出均值 > 0） |
+| ✅ 历史最悠久的激活函数 | ❌ 计算量相对较大（指数运算） |
+
+---
+
+## 📌 三、Tanh（双曲正切）
+
+### 3.1 表达式与图像
+
+```
+公式：tanh(x) = (eˣ - e⁻ˣ) / (eˣ + e⁻ˣ)
+            = 2 × sigmoid(2x) - 1
+
+值域：(-1, 1)    ← 关于原点中心对称
+```
+
+Tanh 其实就是 Sigmoid 的**平移缩放版本**：
+`sigmoid(2x)` 取值为 (0,1)，乘以 2 得 (0,2)，再减 1 得 (-1,1)。
+
+### 3.2 导数
+
+```
+tanh'(x) = 1 - tanh²(x)
+最大值：tanh'(0) = 1
+```
+
+### 3.3 代码画图
+
+```python
+X = torch.linspace(-5, 5, 1000, requires_grad=True)
+Y = torch.tanh(X)          # PyTorch 自带 tanh
+
+Y.sum().backward()
+
+# 画原函数（左）和导函数（右）
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+axes[0].plot(X.detach().numpy(), Y.detach().numpy(), color='purple')
+axes[0].axhline(y=1, color='gray', alpha=0.5)
+axes[0].axhline(y=-1, color='gray', alpha=0.5)
+axes[0].set_title("Tanh")
+
+axes[1].plot(X.detach().numpy(), X.grad.numpy(), color='purple')
+axes[1].set_title("Tanh'")
+# ... 同样的边框美化 ...
+plt.show()
+```
+
+### 3.4 Sigmoid vs Tanh 对比
+
+| 对比维度 | Sigmoid | Tanh |
+|---------|---------|------|
+| 值域 | **(0, 1)** | **(-1, 1)** |
+| 对称中心 | 0.5 | **0**（原点对称） |
+| 导数最大值 | 0.25 | **1** |
+| 有效变化区间 | [-6, 6] | **[-3, 3]**（区间更窄） |
+| 梯度消失问题 | ❌ 严重 | ❌ 也有（深度网络仍会消失） |
+
+> ⚠️ **Sigmoid 和 Tanh 都不适合深度神经网络的隐藏层**——因为它们的导数在两端接近 0，反向传播层层累乘后梯度消失。
+
+---
+
+## 📌 四、ReLU（深度网络首选）
+
+### 4.1 表达式与图像
+
+```
+公式：ReLU(x) = max(0, x)
+
+      ┌ 0,  x ≤ 0
+      └ x,  x > 0
+```
+
+图像就是一个**折线**：
+- x ≤ 0：水平线 y = 0
+- x > 0：斜线 y = x（斜率 1）
+
+### 4.2 导数
+
+```
+ReLU'(x) = 阶跃函数
+
+      ┌ 0,  x ≤ 0
+      └ 1,  x > 0
+
+x = 0 处不可导，工程上规定导数为 0
+```
+
+### 4.3 为什么 ReLU 是深度网络的首选？
+
+| 特性 | ReLU | 对比 Sigmoid/Tanh |
+|------|------|------------------|
+| **梯度消失** | ❌ **不会**！x>0 时导数恒为 1，不衰减 | ✅ 导数 < 1，多层累乘就没了 |
+| **计算量** | ✅ 只需一次 max 比较 | ❌ 需要指数运算 |
+| **稀疏性** | ✅ x≤0 输出为 0，相当于让部分神经元"休眠" | ❌ 输出全非 0 |
+| **收敛速度** | ✅ 更快 | ❌ 较慢 |
+
+### 4.4 代码画图
+
+```python
+X = torch.linspace(-5, 5, 1000, requires_grad=True)
+Y = torch.relu(X)          # PyTorch 自带 ReLU
+
+Y.sum().backward()
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+axes[0].plot(X.detach().numpy(), Y.detach().numpy(), color='purple')
+axes[0].set_title("ReLU")
+
+axes[1].plot(X.detach().numpy(), X.grad.numpy(), color='purple')
+axes[1].set_title("ReLU'")
+# ... 边框美化 ...
+plt.show()
+```
+
+### 4.5 注意点
+
+- **ReLU 的"死亡"问题**：如果学习率太大，某些神经元可能永远输出 0（梯度一直是 0，再也激活不了）
+- 解决方案：用 **LeakyReLU**、**ELU** 等变体，给 x<0 的部分一个很小的负斜率
+
+---
+
+## 📌 五、Softmax（多分类概率转换）
+
+### 5.1 是什么
+
+前面的 Sigmoid/Tanh/ReLU 都是**逐元素操作**——每个输入对应一个输出，互不影响。
+
+而 **Softmax** 不一样，它把一组数值转换成**概率分布**（所有输出之和 = 1）：
+
+```
+公式：Softmax(xᵢ) = eˣⁱ / Σⱼ eˣʲ
+
+对第 i 个元素：
+  分母 = 所有 eˣʲ 的总和
+  分子 = 自己的 eˣⁱ
+
+结果：一组概率，和为 1
+```
+
+**典型用途**：多分类任务的**输出层**
+- 输入：网络最后一层的原始得分（logits）
+- 输出：每个类别的概率，取最大概率的类别作为预测结果
+
+### 5.2 代码演示 + dim 参数详解
+
+```python
+import torch
+
+# 假设分类问题的输出：3条数据，5个类别
+X = torch.randn(3, 5)
+print(X)
+# tensor([[-1.03,  0.57,  0.79, -0.42, -1.18],
+#         [ 1.31,  1.39, -0.89, -0.52, -2.84],
+#         [ 0.85, -0.07,  1.01, -1.64,  0.55]])
+
+# ❌ dim=0：按列计算概率
+y_prob_0 = torch.softmax(X, dim=0)
+print(y_prob_0.sum(dim=0))  # 每一列和为 1
+# tensor([1.000, 1.000, 1.000, 1.000, 1.000])
+# 这是"3分类"的概率！—— 一列就是一个 batch 的不同数据
+
+# ✅ dim=1：按行计算概率（正确用法）
+y_prob_1 = torch.softmax(X, dim=1)
+print(y_prob_1.sum(dim=1))  # 每一行和为 1
+# tensor([1.000, 1.000, 1.000])
+```
+
+### 5.3 dim 参数的理解
+
+| dim | 操作方向 | 含义 |
+|-----|---------|------|
+| **`dim=0`** | 按列 | 同一列不同样本之间算概率（❌ 不常用） |
+| **`dim=1`** | 按行 | **同一行（同一个样本）不同类别之间算概率（✅ 标准用法）** |
+
+> 💡 **记忆方法**：一行 = 一条数据，对一条数据的不同类别输出算概率 → `dim=1`
+
+### 5.4 Softmax 的偏导数
+
+当输出层使用 Softmax + CrossEntropyLoss 时：
+- 如果 i = j（对同一个类别的偏导）：`∂yᵢ/∂xⱼ = yᵢ(1 - yᵢ)`
+- 如果 i ≠ j（对不同类别的偏导）：`∂yᵢ/∂xⱼ = -yᵢ·yⱼ`
+
+结果是**一个矩阵**（雅可比矩阵），而不是一个数值，所以一般不会像 Sigmoid 那样画图表示。
+
+---
+
+## 📝 本章总结 + 对比速查表
+
+### 🌳 知识树
+
+```
+激活函数（Activation Functions）
+│
+├── ① 为什么需要？
+│   └── 引入非线性，否则多层线性 = 单层线性
+│
+├── ② Sigmoid（σ）
+│   ├── 公式：1/(1+e⁻ˣ)
+│   ├── 值域：(0, 1)，过 (0, 0.5)
+│   ├── 导数：σ(x)(1-σ(x))，最大 0.25
+│   └── 问题：梯度消失 ❌
+│
+├── ③ Tanh
+│   ├── 公式：2σ(2x)-1
+│   ├── 值域：(-1, 1)，原点对称
+│   ├── 导数：1-tanh²(x)，最大 1
+│   └── 问题：梯度消失 ❌（深度网络不用）
+│
+├── ④ ReLU ⭐（首选）
+│   ├── 公式：max(0, x)
+│   ├── 导数：x>0→1, x≤0→0
+│   ├── 优点：无梯度消失、计算快、稀疏性
+│   └── 注意："死亡 ReLU"问题（学习率别太大）
+│
+└── ⑤ Softmax（输出层专用）
+    ├── 公式：eˣⁱ/Σeˣʲ → 概率分布
+    ├── 多分类任务的输出层
+    └── dim=1 → 对每个样本的各类别算概率
+```
+
+### 🚀 四种激活函数速查
+
+| 函数 | 公式 | 值域 | 导数最大值 | 适用场景 | 梯度消失 |
+|------|------|:---:|:--------:|---------|:-------:|
+| **Sigmoid** | 1/(1+e⁻ˣ) | (0, 1) | 0.25 | 二分类输出层、浅层网络 | ❌ 严重 |
+| **Tanh** | (eˣ-e⁻ˣ)/(eˣ+e⁻ˣ) | (-1, 1) | **1** | 浅层网络、RNN | ❌ 有 |
+| **ReLU** ⭐ | max(0, x) | [0, ∞) | **1** | **隐藏层首选** | ✅ **无** |
+| **Softmax** | eˣⁱ/Σeˣʲ | (0,1), 和为1 | — | **多分类输出层** | — |
+
+### ⭐ 经验法则
+
+> **隐藏层用 ReLU（或其变体），输出层根据任务决定：**
+> - 回归 → 不用激活函数（或 Identity）
+> - 二分类 → Sigmoid
+> - 多分类 → Softmax
+
+---
+
+---
+
+# 🧠 第十部分：全连接层与参数初始化
+
+> 📺 视频来源：PyTorch 深度学习 · 全连接层详解 + 参数初始化
+> 🎯 核心目标：掌握 `nn.Linear` 的用法和多种参数初始化方法
+> 📝 风格：代码实操 + 理论对比
+
+---
+
+## 📌 一、全连接层（nn.Linear）详解
+
+### 全连接层 = 仿射层 = 线性层
+
+在 PyTorch 中，全连接层通过 `nn.Linear` 实现，本质上就是之前我们手写的**仿射层（Affine）**：
+
+```
+Y = X × Wᵀ + B
+```
+
+| 概念 | 手写版本 | PyTorch 版本 |
+|------|---------|-------------|
+| 层定义 | `class Affine:` | `nn.Linear(in, out)` |
+| 权重 | `self.W` | `layer.weight` |
+| 偏置 | `self.B` | `layer.bias` |
+| 前向传播 | `Y = X @ W + B` | `layer(X)` |
+
+### 基本用法
+
+```python
+import torch.nn as nn
+
+# 创建一个全连接层：输入5个特征，输出2个特征
+linear = nn.Linear(in_features=5, out_features=2)
+
+# 参数
+print(linear.weight)  # 权重，形状 [2, 5]
+print(linear.bias)    # 偏置，形状 [2]
+print(linear.weight.requires_grad)  # True ← 默认开启梯度追踪！
+```
+
+### 可选参数
+
+```python
+nn.Linear(
+    in_features,      # 输入神经元个数
+    out_features,     # 输出神经元个数
+    bias=True,        # 是否使用偏置（False = 过原点）
+    device=None,      # CPU 或 GPU
+    dtype=None        # 数据类型，默认 float32
+)
+```
+
+---
+
+## 📌 二、weight 和 bias 的形状与含义
+
+### 形状规则
+
+| 参数 | 形状 | 原因 |
+|------|------|------|
+| **`weight`** | `[out_features, in_features]` | **保存的是 W 的转置**，方便计算 |
+| **`bias`** | `[out_features]` | 每个输出节点有一个偏置 |
+
+> ⚠️ **注意**：`weight` 的形状是 `[out, in]`，不是 `[in, out]`！PyTorch 存的是转置。
+
+### 为什么存转置？
+
+我们手写的时候 `Y = X @ W + B`，其中 `W` 的形状是 `[in, out]`。
+
+而 PyTorch 存的是 `Wᵀ`（形状 `[out, in]`），因为实际计算时：
+```
+Y = X @ Wᵀ + B   （等价于 X @ W + B）
+```
+
+这样做是为了**计算效率更高**——在反向传播时，梯度计算天然就需要 W 的转置。
+
+```python
+linear = nn.Linear(5, 2)
+print(linear.weight.shape)  # torch.Size([2, 5])  ← [out, in]
+print(linear.bias.shape)    # torch.Size([2])       ← [out]
+```
+
+### 默认参数值
+
+创建 `nn.Linear` 时，参数默认已经有一个**随机的初始值**（不是 0），并且 `requires_grad=True`。
+
+> 至于默认初始化的具体方案，我们会在第六节详细展开。
+
+---
+
+## 📌 三、常数初始化
+
+有时我们需要手动控制参数的初始值，PyTorch 在 `torch.nn.init` 模块中提供了全套初始化方法。
+
+> ⚠️ **注意**：所有初始化方法都带**下划线**（`_`），表示**原地修改**传入的张量。
+
+### 3.1 全零初始化 `zeros_()`
+
+```python
+import torch.nn as nn
+
+linear = nn.Linear(5, 2)
+
+# 把 bias 全部初始化为 0
+nn.init.zeros_(linear.bias)
+print(linear.bias)  # tensor([0., 0.])
+```
+
+### 3.2 全一初始化 `ones_()`
+
+```python
+nn.init.ones_(linear.bias)
+print(linear.bias)  # tensor([1., 1.])
+```
+
+### 3.3 指定常数 `constant_()`
+
+```python
+# 把 bias 全部初始化为 10
+nn.init.constant_(linear.bias, val=10.0)
+
+# 把 weight 全部初始化为 3
+nn.init.constant_(linear.weight, val=3.0)
+```
+
+### 3.4 单位矩阵初始化 `eye_()`
+
+```python
+# 只对 weight 有效（需要是矩阵）
+nn.init.eye_(linear.weight)
+# 非方阵时，取最大主对角线
+```
+
+> ⚠️ **注意**：常数初始化（尤其是全零）**不适合权重 W**。如果所有权重初始化为相同值，反向传播时更新量也相同，所有神经元学习到同样的特征——这就是**对称性问题**。
+
+---
+
+## 📌 四、随机初始化
+
+### 4.1 正态分布 `normal_()`
+
+```python
+# 标准正态分布：均值 0，标准差 1
+nn.init.normal_(linear.weight, mean=0.0, std=1.0)
+
+# 自定义参数
+nn.init.normal_(linear.weight, mean=5.0, std=1.0)
+```
+
+### 4.2 均匀分布 `uniform_()`
+
+```python
+# 均匀分布范围 [a, b]
+nn.init.uniform_(linear.weight, a=0.0, b=10.0)
+```
+
+---
+
+## 📌 五、工程初始化（Xavier / Kaiming）
+
+在实际工程中，我们不会拍脑袋给均值和方差——而是根据**激活函数的类型**选择对应的初始化策略。
+
+### 5.1 Xavier 初始化（适用 Sigmoid / Tanh）
+
+> 也叫 **Glorot 初始化**，目标是让每一层的**输入方差和输出方差相近**，缓解梯度消失/爆炸。
+
+```python
+# Xavier 正态分布（默认：mean=0, std=√(2/(n_in + n_out))）
+nn.init.xavier_normal_(linear.weight)
+
+# Xavier 均匀分布（范围：±√(6/(n_in + n_out))）
+nn.init.xavier_uniform_(linear.weight)
+```
+
+**适用场景**：激活函数为 Sigmoid、Tanh 等 S 型曲线（浅层网络）
+
+### 5.2 Kaiming 初始化（适用 ReLU）
+
+> 也叫 **He 初始化**，专门为 ReLU 及其变体设计，方差是 Xavier 的**两倍**。
+
+```python
+# Kaiming 正态分布（默认：mean=0, std=√(2/n_in)）
+nn.init.kaiming_normal_(linear.weight)
+
+# Kaiming 均匀分布（范围：±√(6/n_in)）
+nn.init.kaiming_uniform_(linear.weight)
+```
+
+**适用场景**：隐藏层使用 ReLU 或其变体（深度网络的首选）
+
+### 两种初始化的对比
+
+| 对比维度 | Xavier（Glorot） | Kaiming（He） |
+|---------|:--------------:|:------------:|
+| 适用激活函数 | Sigmoid, Tanh | **ReLU** 及其变体 |
+| 方差公式（正态） | 2/(n_in + n_out) | **2/n_in** |
+| 范围公式（均匀） | ±√(6/(n_in + n_out)) | **±√(6/n_in)** |
+| 特点 | 考虑输入和输出 | 只考虑输入，方差更大 |
+
+### 可视化对比
+
+```
+Xavier 正态：数据集中在 0 附近，范围较小
+    ╱╲
+  ╱    ╲
+╱        ╲
+───┴───→
+
+Kaiming 正态：数据分布更广，方差更大
+    ╱╲
+  ╱    ╲
+╱        ╲
+────┴────→
+```
+
+---
+
+## 📌 六、默认初始化机制
+
+如果不手动初始化，PyTorch 的 `nn.Linear` 底层默认使用了什么方案？
+
+```python
+# 创建时自动调用了 reset_parameters() 方法
+linear = nn.Linear(5, 2)
+```
+
+查看 PyTorch 源码，`reset_parameters()` 做了两件事：
+
+| 参数 | 默认初始化方案 | 公式 |
+|------|:------------:|------|
+| **`weight`** | **Kaiming 均匀分布** | `U(-√(1/n_in), +√(1/n_in))` |
+| **`bias`** | **均匀分布** | `U(-√(1/n_in), +√(1/n_in))` |
+
+```python
+# 等价于以下代码
+nn.init.kaiming_uniform_(linear.weight, a=math.sqrt(5))  # a 是 ReLU 的负半轴斜率参数
+fan_in, _ = nn.init._calculate_fan_in_and_fan_out(linear.weight)
+bound = 1 / math.sqrt(fan_in)
+nn.init.uniform_(linear.bias, -bound, bound)
+```
+
+> 🎯 **结论**：默认初始化已经考虑了 ReLU 的特性（Kaiming），对于大多数情况直接用就行。只有当你需要特定的激活函数+初始化组合时，才需要手动设置。
+
+---
+
+## 📝 本章总结 + 速查表
+
+### 🌳 知识树
+
+```
+全连接层与参数初始化
+│
+├── ① 全连接层 nn.Linear
+│   ├── Y = X × Wᵀ + B
+│   ├── weight: [out, in]（存转置）
+│   └── bias: [out]
+│
+├── ② 常数初始化（不常用）
+│   ├── zeros_() → 全 0（不适合 W）
+│   ├── ones_() → 全 1
+│   ├── constant_() → 指定常数
+│   └── eye_() → 单位矩阵
+│
+├── ③ 随机初始化
+│   ├── normal_() → 正态分布
+│   └── uniform_() → 均匀分布
+│
+├── ④ Xavier（Glorot）→ Sigmoid / Tanh
+│   ├── xavier_normal_()
+│   └── xavier_uniform_()
+│
+├── ⑤ Kaiming（He）→ ReLU ⭐
+│   ├── kaiming_normal_()
+│   └── kaiming_uniform_()
+│
+└── ⑥ 默认方案
+    ├── weight: Kaiming 均匀分布
+    └── bias: 均匀分布
+```
+
+### 🚀 初始化方法速查表
+
+| 初始化方法 | 代码 | 适用场景 | 特点 |
+|-----------|------|---------|------|
+| **全零** | `nn.init.zeros_()` | bias（很少用于 weight） | 导致对称性问题 ❌ |
+| **全一** | `nn.init.ones_()` | 极少用 | 同对称问题 ❌ |
+| **常数** | `nn.init.constant_(t, val)` | 特殊需求 | — |
+| **正常随机** | `nn.init.normal_(t, mean, std)` | 参数手动调 | 无理论保障 |
+| **均匀随机** | `nn.init.uniform_(t, a, b)` | 参数手动调 | 无理论保障 |
+| **Xavier 正态** | `nn.init.xavier_normal_()` | **Sigmoid / Tanh** | 方差 = 2/(in+out) |
+| **Xavier 均匀** | `nn.init.xavier_uniform_()` | **Sigmoid / Tanh** | 范围 = ±√(6/(in+out)) |
+| **Kaiming 正态** ⭐ | `nn.init.kaiming_normal_()` | **ReLU 及其变体** | 方差 = 2/in |
+| **Kaiming 均匀** ⭐ | `nn.init.kaiming_uniform_()` | **ReLU 及其变体**（默认方案） | 范围 = ±√(6/in) |
+
+### ⭐ 经验法则
+
+> **全连接层参数初始化 = 根据激活函数选方案：**
+> - Hidden layer with **ReLU** → `kaiming_uniform_()`（**或直接用默认，默认就是这个**）
+> - Hidden layer with **Sigmoid/Tanh** → `xavier_uniform_()`
+> - **Bias** 一般初始化为 0
+
+---
+
+---
+
+# 🧠 第十一部分：自定义神经网络模型
+
+> 📺 视频来源：PyTorch 深度学习 · 自定义模型 · Dropout · 参数查看
+> 🎯 核心目标：学会用 nn.Module 搭建神经网络，掌握 Dropout 和各种参数查看方法
+> 📝 风格：从搭积木到完整实践
+
+---
+
+## 📌 一、nn.Module 基类（所有网络的基石）
+
+### 一切皆模块
+
+在 PyTorch 中，**所有层、所有模块、整个神经网络**都继承自 `nn.Module`。
+
+```
+                nn.Module（基类）
+              ┌───────┼───────┐
+              │       │       │
+         nn.Linear  nn.Dropout  nn.BatchNorm1d
+              │       │
+              └───┬───┘
+                  │
+         自定义模型（也是 Module）
+```
+
+**核心思想**：搭积木
+- 一个 `nn.Linear` 是一个 Module
+- 多个 Module 组合起来，还是一个 Module
+- 整个神经网络还是一个 Module
+
+### 自定义模型必须实现两个方法
+
+```python
+import torch
+import torch.nn as nn
+
+class MyModel(nn.Module):
+    def __init__(self):
+        """初始化：定义各层结构"""
+        super().__init__()           # 调用父类构造
+        self.layer1 = nn.Linear(3, 4)  # 定义层
+        self.layer2 = nn.Linear(4, 4)
+
+    def forward(self, x):
+        """前向传播：定义数据流动路径"""
+        x = self.layer1(x)
+        x = torch.relu(x)
+        x = self.layer2(x)
+        return x
+```
+
+### Module 的关键特性
+
+| 特性 | 说明 |
+|------|------|
+| **`__init__`** | 定义各层结构、初始化参数 |
+| **`forward`** | 定义前向传播逻辑（数据如何流动） |
+| **`model(x)`** | 把模型对象当函数调用 → 自动调 `forward` |
+| **`model.parameters()`** | 自动管理**所有层的所有参数**（可迭代） |
+| **`model.state_dict()`** | 返回所有参数的状态字典 |
+| `model.train()` | 切换到训练模式（Dropout 生效） |
+| `model.eval()` | 切换到评估模式（Dropout 关闭） |
+
+> 💡 `model(x)` 等价于 `model.forward(x)`，但前者还会处理一些额外的逻辑（如注册 hooks）。所以**永远用 `model(x)` 而不是手动调 `forward`**。
+
+---
+
+## 📌 二、搭建三层神经网络
+
+### 网络结构图
+
+```
+输入层（3个神经元）
+  │
+  ├── W1: 3×4 矩阵
+  ├── B1: 长度4向量
+  ↓
+第一个隐藏层（4个神经元）
+  │ 激活函数：Tanh
+  │
+  ├── W2: 4×4 矩阵
+  ├── B2: 长度4向量
+  ↓
+第二个隐藏层（4个神经元）
+  │ 激活函数：ReLU
+  │
+  ├── W3: 4×2 矩阵
+  ├── B3: 长度2向量
+  ↓
+输出层（2个神经元）
+  │ 激活函数：Softmax（dim=1）
+  ↓
+二分类概率 [p₁, p₂]，和 = 1
+```
+
+### 代码实现
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.init as init
+
+class NNModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        # 定义三个全连接层
+        self.linear1 = nn.Linear(3, 4)   # 3→4
+        self.linear2 = nn.Linear(4, 4)   # 4→4
+        self.out = nn.Linear(4, 2)       # 4→2
+
+        # 参数初始化（下一节详细讲）
+        init.xavier_normal_(self.linear1.weight)   # Tanh → Xavier
+        init.kaiming_normal_(self.linear2.weight)  # ReLU → Kaiming
+
+    def forward(self, x):
+        # 第一层：线性 → Tanh
+        x = self.linear1(x)
+        x = torch.tanh(x)
+
+        # 第二层：线性 → ReLU
+        x = self.linear2(x)
+        x = torch.relu(x)
+
+        # 输出层：线性 → Softmax
+        x = self.out(x)
+        y = torch.softmax(x, dim=1)  # 对每个样本的2个类别算概率
+
+        return y
+```
+
+### 测试前向传播
+
+```python
+# 1. 生成数据：10条数据，每条3个特征
+X = torch.randn(10, 3)
+
+# 2. 创建模型
+model = NNModel()
+
+# 3. 前向传播
+y_pred = model(X)   # 等价于 model.forward(X)
+
+print(y_pred.shape)  # torch.Size([10, 2])
+print(y_pred)
+# tensor([[0.57, 0.43],
+#         [0.62, 0.38],
+#         ...])   ← 每行和为1
+```
+
+---
+
+## 📌 三、参数初始化实践
+
+结合上一部分的知识，在自定义模型中进行初始化：
+
+| 层 | 激活函数 | 推荐初始化 | 代码 |
+|----|---------|-----------|------|
+| 第一层 | **Tanh** | **Xavier 正态** | `init.xavier_normal_(self.linear1.weight)` |
+| 第二层 | **ReLU** | **Kaiming 正态** | `init.kaiming_normal_(self.linear2.weight)` |
+| 输出层 | Softmax | **默认（Kaiming 均匀）** | 不用手动设置 |
+
+```python
+# 等价于上面 __init__ 中的初始化
+init.xavier_normal_(self.linear1.weight)
+init.kaiming_normal_(self.linear2.weight)
+# self.out 使用默认初始化（PyTorch 自动处理）
+# bias 默认随基初始化，一般不需要手动改
+```
+
+> ⚠️ **注意**：`linear.weight` 的形状是 `[out, in]`（转置存储），但初始化公式中的 `n_in` 和 `n_out` PyTorch 内部会自动识别。
+
+---
+
+## 📌 四、Dropout 正则化
+
+### 4.1 原理
+
+Dropout（随机失活）在进行前向传播时，**以概率 p 随机关闭一些神经元**（输出置为 0）。
+
+```
+关闭前：[a₁, a₂, a₃, a₄, a₅, a₆, a₇, a₈, a₉, a₁₀]
+                      ↓ p=0.5 关闭一半
+关闭后：[0, a₂, 0, 0, a₅, a₆, 0, a₈, 0, a₁₀] × 2倍缩放
+```
+
+**缩放机制**：为了让输出的数学期望不变，剩下的神经元要乘以 **1/(1-p)**。
+- p=0.5 → 剩下的一半 ×2
+- p=0.2 → 剩下的 ×1.25
+
+> 💡 训练时 Dropout 生效，**评估时 Dropout 不生效**（`model.eval()` 自动关闭）。
+
+### 4.2 代码演示
+
+```python
+import torch
+import torch.nn as nn
+
+# 1. 定义数据：10个神经元
+X = torch.randint(1, 10, (1, 10), dtype=torch.float32)
+print(X)
+# tensor([[5., 6., 5., 8., 2., 5., 9., 7., 3., 9.]])
+
+# 2. 创建 Dropout 层（p=0.5，即关闭一半）
+dropout = nn.Dropout(p=0.5)
+
+# 3. 前向传播
+Y = dropout(X)
+print(Y)
+# tensor([[ 0., 12.,  0.,  0.,  4.,  0., 18.,  0.,  6.,  0.]])
+# 关掉了一半 → 剩下的翻倍（×2）
+```
+
+### 4.3 在神经网络中使用
+
+```python
+class NNModelWithDropout(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear1 = nn.Linear(3, 4)
+        self.linear2 = nn.Linear(4, 4)
+        self.out = nn.Linear(4, 2)
+        self.dropout = nn.Dropout(p=0.5)
+
+    def forward(self, x):
+        x = torch.tanh(self.linear1(x))
+        x = self.dropout(x)       # 第一个隐藏层后接 Dropout
+        x = torch.relu(self.linear2(x))
+        x = self.dropout(x)       # 第二个隐藏层后也接 Dropout
+        y = torch.softmax(self.out(x), dim=1)
+        return y
+```
+
+### Dropout 参数
+
+| 参数 | 说明 | 典型值 |
+|------|------|--------|
+| **`p`** | 关闭神经元的概率 | 0.2 ~ 0.5（越大正则化越强）|
+| **`inplace`** | 是否原地修改（默认 False） | 一般用默认 |
+
+---
+
+## 📌 五、查看模型参数（4种方法）
+
+### 5.1 笨办法：逐层手动访问
+
+```python
+# 需要知道每一层的属性名，非常麻烦
+print(model.linear1.weight)
+print(model.linear1.bias)
+print(model.linear2.weight)
+print(model.linear2.bias)
+print(model.out.weight)
+print(model.out.bias)
+```
+
+### 5.2 进阶：`model.parameters()`
+
+```python
+# 自动管理所有层的所有参数
+for param in model.parameters():
+    print(param)
+```
+
+**输出顺序**：按照模型定义中层的顺序（linear1.weight → bias → linear2.weight → bias → out.weight → bias）
+
+但**看不到参数名称**，不知道谁是谁。
+
+### 5.3 推荐：`model.named_parameters()`
+
+```python
+for name, param in model.named_parameters():
+    print(f"{name}: {param.shape}")
+# linear1.weight: torch.Size([4, 3])
+# linear1.bias:   torch.Size([4])
+# linear2.weight: torch.Size([4, 4])
+# linear2.bias:   torch.Size([4])
+# out.weight:     torch.Size([2, 4])
+# out.bias:       torch.Size([2])
+```
+
+> ✅ 既有名称又有参数形状，一目了然！
+
+### 5.4 最简洁：`model.state_dict()`
+
+```python
+print(model.state_dict())
+# OrderedDict([
+#     ('linear1.weight', tensor([...])),
+#     ('linear1.bias', tensor([...])),
+#     ('linear2.weight', tensor([...])),
+#     ...
+# ])
+```
+
+返回一个**有序字典**，一行代码展示所有参数。
+
+| 方法 | 优点 | 缺点 |
+|------|------|------|
+| 手动访问 | 精准访问某一层 | 代码繁琐，需知道属性名 |
+| `parameters()` | 自动管理 | 无名称，分不清谁是谁 |
+| `named_parameters()` ⭐ | **有名称有参数** | 需 for 循环 |
+| `state_dict()` ⭐ | **一行搞定，清晰直观** | 输出较长 |
+
+---
+
+## 📌 六、查看模型结构与参数数量（torchsummary）
+
+当模型变大（比如 784→50→10），手动查看参数就不现实了。我们需要专业的工具。
+
+### 6.1 安装
+
+```bash
+pip install torchsummary
+```
+
+### 6.2 使用
+
+```python
+from torchsummary import summary
+
+# 传入模型、输入特征数、batch_size、设备
+model = NNModel()
+summary(model, input_size=(3,), batch_size=10, device='cpu')
+```
+
+### 6.3 输出解读
+
+```
+----------------------------------------------------------------
+        Layer (type)               Output Shape         Param #
+================================================================
+            Linear-1                [-1, 4, 4]              16
+            Linear-2                 [-1, 4, 4]              20
+            Linear-3                 [-1, 2, 4]              10
+================================================================
+Total params: 46
+Trainable params: 46
+Non-trainable params: 0
+----------------------------------------------------------------
+Input size (MB): 0.00
+Forward/backward pass size (MB): 0.00
+Params size (MB): 0.00
+Estimated Total Size (MB): 0.00
+----------------------------------------------------------------
+```
+
+| 列 | 含义 |
+|----|------|
+| **Layer (type)** | 层的类型（这里都是 Linear） |
+| **Output Shape** | 经过该层后的输出形状 |
+| **Param #** | **该层的参数个数（权重 + 偏置）** |
+| **Total params** | 模型总参数量 |
+| **Trainable params** | 可训练参数数量 |
+
+### 6.4 参数个数计算
+
+| 层 | 权重参数 | 偏置参数 | 总参数 |
+|----|:-------:|:-------:|:-----:|
+| Linear1 (3→4) | 3×4=12 | 4 | **16** |
+| Linear2 (4→4) | 4×4=16 | 4 | **20** |
+| Linear3 (4→2) | 4×2=8 | 2 | **10** |
+| **合计** | — | — | **46** |
+
+### 6.5 参数规模的单位
+
+| 单位 | 含义 | 示例 |
+|:---:|------|------|
+| **K** | 千（10³） | 小网络 |
+| **M** | 百万（10⁶） | 中等网络 |
+| **B** | **十亿（10⁹）** | 大语言模型 |
+
+> 真实的 LLM 参数规模：DeepSeek-R1 满血版 = **671B** = **6710 亿参数**
+
+---
+
+## 📝 本章总结 + 完整代码
+
+### 🌳 知识树
+
+```
+自定义神经网络模型
+│
+├── ① nn.Module（基类）
+│   ├── __init__：定义层结构
+│   ├── forward：定义前向传播
+│   └── model(x) → 自动调 forward
+│
+├── ② 搭建三层神经网络
+│   ├── 3→4 Tanh → 4 ReLU → 2 Softmax
+│   └── 初始化：Xavier + Kaiming 组合
+│
+├── ③ Dropout 正则化
+│   ├── nn.Dropout(p)
+│   ├── 训练时关闭 + 缩放
+│   └── 评估时自动关闭
+│
+├── ④ 参数查看方法
+│   ├── 手动访问（麻烦）
+│   ├── parameters()（无名称）
+│   ├── named_parameters()（有名称 ✅）
+│   └── state_dict()（字典 ✅）
+│
+└── ⑤ 结构查看（torchsummary）
+    ├── summary(model, input_size)
+    ├── Output Shape / Param #
+    └── 参数规模：K → M → B
+```
+
+### 🔥 完整可运行代码
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.init as init
+from torchsummary import summary
+
+# ============ 1. 自定义三层神经网络 ============
+class NNModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear1 = nn.Linear(3, 4)
+        self.linear2 = nn.Linear(4, 4)
+        self.out = nn.Linear(4, 2)
+        self.dropout = nn.Dropout(p=0.5)
+
+        # 参数初始化
+        init.xavier_normal_(self.linear1.weight)   # Tanh → Xavier
+        init.kaiming_normal_(self.linear2.weight)  # ReLU → Kaiming
+        # self.out 用默认初始化
+
+    def forward(self, x):
+        x = torch.tanh(self.linear1(x))
+        x = self.dropout(x)
+        x = torch.relu(self.linear2(x))
+        x = self.dropout(x)
+        y = torch.softmax(self.out(x), dim=1)
+        return y
+
+# ============ 2. 测试前向传播 ============
+X = torch.randn(10, 3)
+model = NNModel()
+y_pred = model(X)
+print(f"输出形状: {y_pred.shape}")
+print(f"每行概率和: {y_pred.sum(dim=1)}")  # 应该都是 1.0
+
+# ============ 3. 查看参数 ============
+print("\n=== named_parameters() ===")
+for name, param in model.named_parameters():
+    print(f"{name}: {param.shape}")
+
+print("\n=== state_dict() ===")
+print(model.state_dict())
+
+# ============ 4. 查看模型结构 ============
+print("\n=== torchsummary ===")
+summary(model, input_size=(3,), batch_size=10, device='cpu')
+```
+
+### 关键概念速查表
+
+| 概念 | 一句话解释 |
+|------|-----------|
+| **`nn.Module`** | 所有神经网络层的基类 |
+| **`__init__`** | 定义各层和参数初始化 |
+| **`forward`** | 定义数据流动路径 |
+| **`model(x)`** | 自动调用 forward 进行前向传播 |
+| **`nn.Dropout(p)`** | 以概率 p 随机关闭神经元 + 缩放 |
+| **`model.eval()`** | 评估模式，Dropout 关闭 |
+| **`model.parameters()`** | 获取所有参数的迭代器 |
+| **`model.named_parameters()`** | 带名称的参数迭代器 |
+| **`model.state_dict()`** | 所有参数的状态字典 |
+| **`torchsummary.summary()`** | 查看模型结构、每层输出形状和参数量 |
+
+> 🎯 现在你已经掌握了用 `nn.Module` 搭建任意神经网络的能力！把层像积木一样组合、初始化参数、加 Dropout、查看结构和参数，全部都会了。
+
+---
+
+---
+
+# 🧠 第十二部分：设备管理（device）与 Sequential 快捷搭建
+
+> 📺 视频来源：PyTorch 深度学习 · 设备设置 · Sequential 快捷定义
+> 🎯 核心目标：掌握 CPU/GPU 设备管理，学会用 Sequential 快速搭建神经网络
+> 📝 风格：实操对比 + 最佳实践
+
+---
+
+## 📌 一、什么是设备（device）？CPU vs GPU
+
+### device 的概念
+
+在 PyTorch 中，**张量和模型都可以放在不同的设备上运行**：
+
+| 设备 | 说明 | 计算速度 |
+|------|------|:-------:|
+| **CPU** | 中央处理器，通用的计算单元 | 较慢 |
+| **GPU**（CUDA） | 图形处理器，擅长**并行计算** | **快 10~100 倍** |
+
+深度学习训练的核心是**大量矩阵运算**→ GPU 的并行架构天然适合 → **加速训练几倍到几十倍**。
+
+### 查看设备
+
+```python
+import torch
+
+# 检查 GPU 是否可用
+print(torch.cuda.is_available())  # True 表示 GPU 版本安装成功
+# 查看 GPU 数量
+print(torch.cuda.device_count())
+
+# 查看当前张量默认设备
+x = torch.randn(3, 5)
+print(x.device)  # cpu
+```
+
+---
+
+## 📌 二、创建张量时指定设备
+
+创建张量时，通过 `device` 参数直接指定：
+
+```python
+# 创建在 CPU 上（默认）
+x_cpu = torch.randn(3, 5)
+
+# 创建在 GPU 上（需要安装 CUDA 版本）
+x_gpu = torch.randn(3, 5, device='cuda')
+# 等价于
+x_gpu = torch.randn(3, 5, device=torch.device('cuda'))
+
+# 指定具体的 GPU 编号（多显卡时）
+x_gpu0 = torch.randn(3, 5, device='cuda:0')
+```
+
+> 💡 **提示**：`'cuda'` 默认等于 `'cuda:0'`。如果有多个 GPU，可以用 `'cuda:1'`、`'cuda:2'` 等。
+
+---
+
+## 📌 三、迁移设备 — `to()` 方法
+
+如果张量已经创建好了，可以用 `.to()` 方法迁移到另一个设备：
+
+```python
+# 创建在 CPU 上
+x = torch.randn(3, 5)
+print(x.device)  # cpu
+
+# 迁移到 GPU
+x = x.to('cuda')
+print(x.device)  # cuda:0
+
+# 再迁移回 CPU
+x = x.to('cpu')
+print(x.device)  # cpu
+```
+
+### `to()` 还能转换数据类型
+
+```python
+x = torch.randn(3, 5)
+x = x.to(dtype=torch.int64)   # 转换数据类型
+x = x.to(device='cuda', dtype=torch.float32)  # 同时转设备和类型
+```
+
+> 🎯 **类比**：`to()` 就像张量的"搬家"工具，可以把张量搬到任何设备上。
+
+---
+
+## 📌 四、将模型迁移到 GPU
+
+### 4.1 模型的参数默认在 CPU
+
+```python
+import torch.nn as nn
+
+model = nn.Linear(3, 4)
+for param in model.parameters():
+    print(param.device)  # cpu（默认）
+```
+
+### 4.2 把模型迁移到 GPU
+
+```python
+model = model.to('cuda')   # 模型所有参数 → GPU
+```
+
+### 4.3 前向传播时设备必须一致
+
+> ⚠️ **关键规则**：**数据和模型必须在同一个设备上**，否则报错。
+
+```python
+# ❌ 错误示例
+model = nn.Linear(3, 4).to('cuda')
+x = torch.randn(10, 3)           # 默认 CPU
+y = model(x)  # RuntimeError：Expected all tensors to be on the same device!
+
+# ✅ 正确做法
+x = torch.randn(10, 3).to('cuda')  # 数据也放到 GPU
+y = model(x)                        # 正常工作
+```
+
+### 4.4 创建层时直接指定设备
+
+`nn.Linear` 创建时也可以直接指定设备：
+
+```python
+# 直接在 GPU 上创建层
+layer = nn.Linear(3, 4, device='cuda')
+
+# 查看参数设备
+print(layer.weight.device)  # cuda:0
+```
+
+> 💡 但更推荐的做法是用 `model.to('cuda')` 整体迁移，而不是每个层单独设。
+
+---
+
+## 📌 五、设备统一管理（全局变量 + is_available）
+
+### 5.1 为什么需要统一管理？
+
+如果代码里到处写 `device='cuda'`，以后想换回 CPU 运行就要改几十个地方 → **用全局变量统一管理**。
+
+### 5.2 标准写法（工程最佳实践）
+
+```python
+# 定义一个全局变量，统一管理设备
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(device)  # cuda 或 cpu
+```
+
+### 5.3 使用全局变量
+
+```python
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# 创建数据
+x = torch.randn(10, 3).to(device)
+
+# 创建模型
+model = NNModel().to(device)
+
+# 前向传播
+y = model(x)
+```
+
+以后如果想切换设备：
+- **用 GPU**：自动检测，不用改
+- **用 CPU**：改一行都行，把 `'cuda'` 改成 `'cpu'`（或者直接卸载 CUDA 版）
+
+> 🎯 **一句话总结**：永远不要硬编码 `device='cuda'`，用 `'cuda' if torch.cuda.is_available() else 'cpu'`。
+
+---
+
+## 📌 六、Sequential 顺序容器（快捷搭建神经网络）
+
+### 6.1 为什么需要 Sequential？
+
+之前我们自定义模型（继承 `nn.Module`）很灵活，但对于**简单的顺序结构**：
+
+```
+Linear → Tanh → Linear → ReLU → Linear → Softmax
+```
+
+这种**一层接一层的顺序结构**，可以用 `nn.Sequential` 更简洁地定义。
+
+### 6.2 两种方式对比
+
+**方式一：继承 nn.Module（我们之前的方式）**
+
+```python
+class NNModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear1 = nn.Linear(3, 4)
+        self.linear2 = nn.Linear(4, 4)
+        self.out = nn.Linear(4, 2)
+
+    def forward(self, x):
+        x = torch.tanh(self.linear1(x))
+        x = torch.relu(self.linear2(x))
+        x = torch.softmax(self.out(x), dim=1)
+        return x
+```
+
+**方式二：nn.Sequential（快捷方式）**
+
+```python
+model = nn.Sequential(
+    nn.Linear(3, 4),
+    nn.Tanh(),          # 激活函数也被当成"层"
+    nn.Linear(4, 4),
+    nn.ReLU(),
+    nn.Linear(4, 2),
+    nn.Softmax(dim=1)
+)
+```
+
+> **关键点**：激活函数用**大写**（`nn.Tanh()`、`nn.ReLU()`、`nn.Softmax()`）——它们是类，作为层放入 Sequential。
+
+### 6.3 把激活函数也包成"层"
+
+之前我们用 `torch.tanh(x)` 是**函数式调用**。在 Sequential 中，必须使用**类形式的激活函数**：
+
+| 函数式（之前用） | 类形式（Sequential 中用） | 说明 |
+|:---:|:---:|------|
+| `torch.tanh(x)` | `nn.Tanh()` | 双曲正切 |
+| `torch.relu(x)` | `nn.ReLU()` | ReLU |
+| `torch.sigmoid(x)` | `nn.Sigmoid()` | Sigmoid |
+| `torch.softmax(x, dim)` | `nn.Softmax(dim)` | Softmax |
+
+> 💡 类形式的激活函数也是一个 `nn.Module`，只是内部没有任何参数（参数量 = 0）。
+
+### 6.4 前向传播和查看结构
+
+```python
+# 1. 定义数据
+X = torch.randn(10, 3)
+
+# 2. 创建模型
+model = nn.Sequential(
+    nn.Linear(3, 4),
+    nn.Tanh(),
+    nn.Linear(4, 4),
+    nn.ReLU(),
+    nn.Linear(4, 2),
+    nn.Softmax(dim=1)
+)
+
+# 3. 前向传播（和 nn.Module 一样！）
+y_pred = model(X)
+print(y_pred.shape)   # torch.Size([10, 2])
+print(y_pred.sum(dim=1))  # 每行和为 1
+```
+
+### 6.5 torchsummary 查看结构
+
+```python
+from torchsummary import summary
+
+summary(model, input_size=(3,), batch_size=10, device='cpu')
+```
+
+输出：
+```
+----------------------------------------------------------------
+        Layer (type)               Output Shape         Param #
+================================================================
+            Linear-1                [-1, 10, 4]              16
+              Tanh-2                [-1, 10, 4]               0
+            Linear-3                [-1, 10, 4]              20
+              ReLU-4                [-1, 10, 4]               0
+            Linear-5                [-1, 10, 2]              10
+           Softmax-6                [-1, 10, 2]               0
+================================================================
+Total params: 46
+Trainable params: 46
+Non-trainable params: 0
+----------------------------------------------------------------
+```
+
+注意：
+- 现在是 **6 层**（3 个 Linear + 3 个激活函数层）
+- 激活函数层的 **Param # = 0**（没有参数）
+- 总参数量仍然是 **46**，和之前完全一样
+
+---
+
+## 📌 七、Sequential 的参数初始化（apply 方法）
+
+### 7.1 Sequential 初始化的问题
+
+Sequential 定义很简洁，但**不能在定义的同时做参数初始化**（因为初始化需逐个层指定策略）。
+
+```python
+# ❌ 没办法在 Sequential 创建时做 Xavier/Kaiming 初始化
+model = nn.Sequential(
+    nn.Linear(3, 4),   # 想初始化这里用 Xavier
+    nn.Tanh(),
+    nn.Linear(4, 4),   # 想初始化这里用 Kaiming
+    ...
+)
+# 嗯...怎么初始化呢？
+```
+
+### 7.2 解决方案：`model.apply()` 方法
+
+`apply()` 方法会把传入的函数**应用到模型的每一个子模块（层）上**。
+
+```python
+def init_weights(layer):
+    """参数初始化函数：对 Linear 层做初始化"""
+    if isinstance(layer, nn.Linear):
+        # 初始化权重
+        nn.init.xavier_uniform_(layer.weight)
+        # 初始化偏置（给一个很小的常数）
+        nn.init.constant_(layer.bias, 0.01)
+
+# 创建模型
+model = nn.Sequential(...)
+
+# 应用初始化（注意：传函数名，不要加括号）
+model.apply(init_weights)
+```
+
+### 7.3 原理说明
+
+```python
+# apply 底层大致逻辑：
+for sub_module in model.modules():   # 递归遍历所有子模块
+    init_weights(sub_module)          # 对每个模块应用函数
+
+# 在我们的例子中，sub_module 依次是：
+#   nn.Linear(3,4) → init_weights(Linear)
+#   nn.Tanh()       → init_weights(Tanh)   ← Tanh 不是 Linear，跳过
+#   nn.Linear(4,4) → init_weights(Linear)
+#   nn.ReLU()       → init_weights(ReLU)   ← 不是 Linear，跳过
+#   nn.Linear(4,2) → init_weights(Linear)
+#   nn.Softmax()    → init_weights(Softmax) ← 不是 Linear，跳过
+```
+
+### 7.4 完整示例
+
+```python
+import torch.nn as nn
+import torch.nn.init as init
+
+def init_weights(layer):
+    if isinstance(layer, nn.Linear):
+        init.xavier_uniform_(layer.weight)
+        init.constant_(layer.bias, 0.01)
+
+model = nn.Sequential(
+    nn.Linear(3, 4),
+    nn.Tanh(),
+    nn.Linear(4, 4),
+    nn.ReLU(),
+    nn.Linear(4, 2),
+    nn.Softmax(dim=1)
+)
+
+# 对模型应用初始化
+model.apply(init_weights)
+
+# 前向传播测试
+X = torch.randn(10, 3)
+y_pred = model(X)
+print(y_pred)
+```
+
+### 7.5 继承式 vs Sequential 对比
+
+| 对比维度 | 继承 nn.Module（手动定义） | nn.Sequential（顺序容器） |
+|---------|:------------------------:|:------------------------:|
+| **定义方式** | 自定义类，写 `__init__` + `forward` | 像列表一样依次传入层 |
+| **灵活性** | ✅ **高**（可自定义复杂 forward 逻辑） | ❌ 仅支持**简单顺序**结构 |
+| **参数初始化** | ✅ 在 `__init__` 中逐层指定 | ⚠️ 需额外用 `apply()` 统一处理 |
+| **代码简洁度** | ❌ 较繁琐 | ✅ **非常简洁** |
+| **适合场景** | 复杂网络（残差连接、多分支等） | **简单顺序**网络（MLP 等） |
+
+---
+
+## 📝 本章总结 + 完整代码
+
+### 🌳 知识树
+
+```
+设备管理与 Sequential 搭建
+│
+├── ① 设备（device）
+│   ├── CPU vs GPU
+│   ├── 创建时指定：device='cuda'
+│   ├── 迁移：.to('cuda')
+│   └── 统一管理：torch.device(...)
+│
+├── ② 设备最佳实践
+│   ├── model = model.to(device)
+│   ├── X = X.to(device)
+│   └── device = 'cuda' if cuda.is_available() else 'cpu'
+│
+├── ③ nn.Sequential（快捷搭建）
+│   ├── 像列表一样定义各层
+│   ├── 激活函数用类形式：nn.Tanh() / nn.ReLU() / nn.Softmax()
+│   └── model(x) 自动顺序前向传播
+│
+└── ④ apply() 参数初始化
+    ├── 定义函数取每个层
+    ├── isinstance 判断层类型
+    ├── 只对 Linear 层做初始化
+    └── model.apply(init_weights)
+```
+
+### 🔥 完整可运行代码
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.init as init
+from torchsummary import summary
+
+# ============ 1. 设备管理 ============
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"使用设备: {device}")
+
+# ============ 2. 定义初始化函数 ============
+def init_weights(layer):
+    if isinstance(layer, nn.Linear):
+        init.xavier_uniform_(layer.weight)
+        init.constant_(layer.bias, 0.01)
+
+# ============ 3. 用 Sequential 搭建模型 ============
+model = nn.Sequential(
+    nn.Linear(3, 4),
+    nn.Tanh(),
+    nn.Linear(4, 4),
+    nn.ReLU(),
+    nn.Linear(4, 2),
+    nn.Softmax(dim=1)
+).to(device)
+
+# 参数初始化
+model.apply(init_weights)
+
+# ============ 4. 前向传播 ============
+X = torch.randn(10, 3).to(device)
+y_pred = model(X)
+
+print(f"输出形状: {y_pred.shape}")
+print(f"预测结果:\n{y_pred}")
+
+# ============ 5. 查看模型结构 ============
+summary(model, input_size=(3,), batch_size=10, device='cpu')
+```
+
+### 关键概念速查表
+
+| 概念 | 一句话解释 |
+|------|-----------|
+| **`device`** | 张量/模型运行在哪个设备上（CPU 或 GPU） |
+| **`tensor.to(device)`** | 把张量迁移到指定设备 |
+| **`model.to(device)`** | 把模型所有参数迁移到指定设备 |
+| **`torch.cuda.is_available()`** | 检查 GPU 是否可用 |
+| **全局 device 变量** | `'cuda' if cuda.is_available() else 'cpu'` |
+| **`nn.Sequential`** | 按顺序排列层，自动完成前向传播 |
+| **`nn.Tanh()`、`nn.ReLU()`** | 激活函数的类形式，可作为层放入 Sequential |
+| **`model.apply(fn)`** | 对每个子模块应用函数 fn |
+| **`isinstance(layer, nn.Linear)`** | 判断层是否是线性层（用于初始化） |
+
+> 🎯 **现在你学会了两种搭建方式**：
+> - **继承 nn.Module** — 灵活强大，适合复杂网络
+> - **nn.Sequential** — 简洁快捷，适合简单顺序网络
+>
+> 以后写代码的时候，别忘了 **device 统一管理**那一步！
+
+---
+
+# 🧠 第十三部分：损失函数（Loss Functions）
+
+> 📺 视频来源：PyTorch 深度学习 · 损失函数详解
+> 🎯 核心目标：掌握分类任务和回归任务的常用损失函数及其 PyTorch 实现
+> 📝 风格：理论公式 + 代码实操
+
+---
+
+## 📌 一、分类任务 vs 回归任务
+
+损失函数根据**任务类型**不同分为两大类：
+
+| 任务类型 | 输出层激活函数 | 常见损失函数 | 用途 |
+|---------|:------------:|-------------|------|
+| **二分类** | Sigmoid | **BCE Loss**（二元交叉熵） | 是/否、正/负 |
+| **多分类** | Softmax | **CrossEntropyLoss**（交叉熵） | 猫/狗/鸟... |
+| **回归** | 无（Identity） | **MSE / MAE / SmoothL1** | 预测连续值 |
+
+---
+
+## 📌 二、二分类损失 — BCE Loss（二元交叉熵）
+
+### 2.1 公式回顾
+
+```
+BCE Loss = -1/N × Σ [ yᵢ × log(pᵢ) + (1-yᵢ) × log(1-pᵢ) ]
+```
+
+其中：
+- `yᵢ` = 真实标签（0 或 1）
+- `pᵢ` = 预测为正类（类别 1）的概率
+
+**本质**：只看正确类别对应的预测概率，取对数后求平均。
+
+### 2.2 输出层配合
+
+二分类任务输出层用 **Sigmoid** 激活函数：输出一个概率值 p（正类概率），负类概率就是 1-p。
+
+```
+┌─ 输入数据 ─→ Linear(..., 1) ─→ Sigmoid ─→ p（正类概率）
+```
+
+### 2.3 代码演示
+
+```python
+import torch
+import torch.nn as nn
+
+# 1. 输入数据（经过前向传播后）
+X = torch.randn(3, 2)                          # 3条数据，2个特征
+y_pred = torch.sigmoid(X)                       # → 预测概率（3×2）
+
+# 但注意：BCE 的输入通常只需 1 个输出（正类概率）
+# 这里为演示，假设 3×2 是每个样本的2个类别概率
+
+# 2. 真实标签（独热编码形式，或概率分布）
+target = torch.tensor([[1.0, 0.0],    # 属于第0类
+                       [0.0, 1.0],    # 属于第1类
+                       [0.3, 0.7]])   # 分布概率
+
+# 3. 定义损失函数
+bce_loss = nn.BCELoss()
+
+# 4. 计算损失
+loss = bce_loss(y_pred, target)
+print(f"BCE Loss: {loss.item():.4f}")
+```
+
+> ⚠️ **注意**：BCE Loss 要求 `input` 和 `target` **形状相同**。如果你的 Sigmoid 输出是 N×1（只输出正类概率），target 也必须是 N×1 的 0/1 标签。
+
+### 2.4 参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `nn.BCELoss()` | 输入必须是经过 Sigmoid 的概率值 |
+| `nn.BCEWithLogitsLoss()` | 输入可以是原始 logits（内部自带 Sigmoid），数值更稳定 |
+
+> 💡 **推荐**：实际工程中用 `BCEWithLogitsLoss` 而不是 `BCELoss` + 手动 Sigmoid，可以避免数值不稳定的问题。
+
+---
+
+## 📌 三、多分类损失 — CrossEntropyLoss（交叉熵）
+
+### 3.1 公式回顾
+
+```
+CrossEntropy = -1/N × Σᵢ log(pᵢ[ yᵢ ])
+```
+
+其中：
+- `yᵢ` = 第 i 个样本的**真实类别编号**（如 0, 1, 2...）
+- `pᵢ[yᵢ]` = 模型预测该样本属于类别 yᵢ 的概率
+
+**本质**：把真实类别对应的预测概率拿出来取负对数，求平均。
+
+### 3.2 PyTorch 的特殊设计
+
+⚠️ **关键点**：`nn.CrossEntropyLoss` **内部已经集成了 Softmax**，所以：
+- ❌ 不需要手动在输出层加 Softmax
+- ✅ 直接把**网络最后一层的原始输出（logits）** 传进去
+
+```
+代码中：input = logits（未激活的原始值）
+底层逻辑：input → log_softmax → NLLLoss → 最终损失
+```
+
+### 3.3 代码演示（场景一：真实标签为顺序编号）
+
+```python
+# 6条数据，8分类
+input = torch.randn(6, 8)              # logits（原始输出）
+target = torch.randint(0, 8, (6,))    # 真实标签编号：[3, 7, 0, 2, ...]
+
+loss_fn = nn.CrossEntropyLoss()
+loss = loss_fn(input, target)
+print(f"CrossEntropy Loss: {loss.item():.4f}")
+```
+
+### 3.4 代码演示（场景二：真实标签为概率分布/独热编码）
+
+```python
+# 如果 target 传概率分布（形状与 input 相同）
+input = torch.randn(6, 8)
+target = torch.rand(6, 8)                       # 随机概率分布
+# target = torch.softmax(torch.randn(6, 8), dim=1)  # 每行和为1
+
+loss_fn = nn.CrossEntropyLoss()
+loss = loss_fn(input, target)
+```
+
+### 3.5 CrossEntropyLoss vs BCE Loss 对比
+
+| 对比维度 | BCE Loss | CrossEntropyLoss |
+|---------|:-------:|:---------------:|
+| **适用任务** | 二分类 | 多分类 |
+| **输出层激活函数** | 需要 Sigmoid | **不需要**（内部自带 Softmax） |
+| **input 形状** | 与 target 相同 | 可以不同 |
+| **target 形状** | 与 input 相同（概率/独热） | N 维向量（类别编号）或 N×C 矩阵（概率） |
+
+---
+
+## 📌 四、回归损失 — MSE / MAE / Smooth L1
+
+### 4.1 三种损失函数对比
+
+| 损失函数 | 别名 | 公式 | 特点 |
+|---------|:---:|------|------|
+| **MSE**（均方误差） | L2 Loss | 1/N × Σ(y - ŷ)² | 光滑可导，但对异常值敏感 ❌ |
+| **MAE**（平均绝对误差） | L1 Loss | 1/N × Σ\|y - ŷ\| | 对异常值鲁棒，但零点不可导 |
+| **Smooth L1** | Huber Loss 变体 | 分区间定义 | 结合二者优点 ✅ |
+
+### 4.2 Smooth L1 公式
+
+```
+           ┌ 0.5 × (y - ŷ)²,          |y - ŷ| < 1
+SmoothL1 = ┤
+           └ |y - ŷ| - 0.5,            |y - ŷ| ≥ 1
+```
+
+- 小误差时 → 用 L2（光滑可导）
+- 大误差时 → 用 L1（降低异常值影响）
+- 在 ±1 处平滑连接
+
+### 4.3 代码演示
+
+```python
+import torch
+import torch.nn as nn
+
+# 数据
+input = torch.randn(3, 5)    # 预测值
+target = torch.randn(3, 5)   # 真实值
+
+# 定义三种损失函数
+mae_loss = nn.L1Loss()               # MAE
+mse_loss = nn.MSELoss()              # MSE
+smooth_l1_loss = nn.SmoothL1Loss()   # Smooth L1
+
+# 计算
+mae = mae_loss(input, target)
+mse = mse_loss(input, target)
+sl1 = smooth_l1_loss(input, target)
+
+print(f"MAE:       {mae.item():.4f}")
+print(f"MSE:       {mse.item():.4f}")  # 通常比 MAE 大（平方放大）
+print(f"Smooth L1: {sl1.item():.4f}")  # 介于两者之间
+```
+
+### 4.4 reduction 参数
+
+所有回归损失函数都支持 `reduction` 参数：
+
+```python
+nn.MSELoss(reduction='mean')   # 默认：求平均
+nn.MSELoss(reduction='sum')    # 求和，不平均
+nn.MSELoss(reduction='none')   # 不聚合，返回每个位置的损失
+```
+
+> 💡 用 `reduction='sum'` 相当于不做平均得到的"总误差"，`'none'` 可以看到每个数据点的损失。
+
+### 4.5 Smooth L1 的 beta 参数
+
+```python
+# beta 控制 L1/L2 切换的阈值（默认 1.0）
+nn.SmoothL1Loss(beta=1.0)   # 标准版本
+nn.SmoothL1Loss(beta=0.5)   # 更小的阈值 → 更早切换到 L1
+```
+
+---
+
+## 📝 本章总结 + 选择指南
+
+### 🌳 知识树
+
+```
+损失函数（Loss Functions）
+│
+├── ① 分类问题
+│   ├── 二分类 → BCE Loss（配合 Sigmoid）
+│   │   └── 推荐：BCEWithLogitsLoss（数值更稳定）
+│   └── 多分类 → CrossEntropyLoss（自带 Softmax）
+│       └── 直接传 logits + 类别编号
+│
+└── ② 回归问题
+    ├── MSE（L2 Loss）→ 光滑可导，对异常值敏感
+    ├── MAE（L1 Loss）→ 鲁棒，零点不可导
+    └── Smooth L1 → 二者结合，工程首选 ✅
+```
+
+### 🚀 损失函数选择速查
+
+| 场景 | 推荐的损失函数 | 配合的激活函数 |
+|------|:--------------:|:-------------:|
+| **二分类** | `BCEWithLogitsLoss` ✅ | 不需要手动 Sigmoid |
+| **多分类** | `CrossEntropyLoss` ✅ | 不需要手动 Softmax |
+| **回归（一般）** | `MSELoss` | 无 |
+| **回归（有异常值）** | `SmoothL1Loss` ✅ | 无 |
+| **回归（需要鲁棒性）** | `L1Loss` | 无 |
+
+### ⭐ 经验法则
+
+> **分类任务**：二分类用 `BCEWithLogitsLoss`，多分类用 `CrossEntropyLoss`（都不需要手动加激活函数）。
+>
+> **回归任务**：一般用 `MSELoss`；如果数据有异常值（outliers），用 `SmoothL1Loss` 更安全。
+>
+> 损失函数的**绝对值不重要**，重要的是它能在训练过程中**持续下降**。
+
+---
+
+# 🧠 第十四部分：优化方法（Optimizers）
+
+> 📺 视频来源：PyTorch 深度学习 · 优化器详解（动量法/学习率衰减/AdaGrad/RMSProp/Adam/AdamW）
+> 🎯 核心目标：掌握 PyTorch 中各种优化器的原理与使用
+> 📝 风格：等高线可视化 + 代码实操对比
+
+---
+
+## 📌 一、优化器概述
+
+### 优化器解决了什么问题？
+
+有了损失函数后，我们需要**最小化损失**。怎么做？用**梯度下降**更新参数。而优化器就是"如何更新参数"的具体实现。
+
+```
+参数_new = 参数_old - 学习率 × 梯度
+```
+
+### PyTorch 中的优化器
+
+所有优化器都在 `torch.optim` 模块下：
+
+| 优化器 | 特点 | 使用频率 |
+|--------|------|:-------:|
+| **SGD** | 基础梯度下降 | ⭐⭐ |
+| **SGD + Momentum** | 带动量的 SGD，加速收敛 | ⭐⭐⭐ |
+| **AdaGrad** | 自适应学习率（历史梯度平方和） | ⭐ |
+| **RMSProp** | AdaGrad 改进版（指数移动平均） | ⭐⭐ |
+| **Adam** ⭐ | 动量 + RMSProp 结合，工程首选 | ⭐⭐⭐⭐⭐ |
+| **AdamW** ⭐ | Adam + 正确的权值衰减 | ⭐⭐⭐⭐⭐（最新推荐） |
+
+---
+
+## 📌 二、SGD + Momentum（动量法）
+
+### 2.1 标准 SGD 的问题
+
+标准 SGD 根据当前梯度更新参数，但会遇到：
+- **震荡严重**：在等高线的"窄谷"中来回摆动
+- **收敛慢**：尤其是平坦区域
+
+### 2.2 动量法（Momentum）
+
+动量法引入**历史梯度的加权和**（类似物理中的动量）：
+
+```
+v = momentum × v_old + gradient    ← 速度累积
+w = w - lr × v                       ← 用速度更新参数
+```
+
+- 梯度方向一致时 → 加速前进
+- 梯度方向相反时 → 减缓震荡
+
+### 2.3 代码对比
+
+```python
+import torch
+import torch.optim as optim
+
+# 参数
+params = torch.tensor([-7.0, 2.0], requires_grad=True)
+
+# SGD（无动量）
+optim_sgd = optim.SGD([params], lr=0.01)
+
+# SGD + 动量（momentum=0.9）
+optim_momentum = optim.SGD([params], lr=0.01, momentum=0.9)
+```
+
+> 💡 **只加了一个参数 `momentum=0.9` 就实现了动量法！**
+
+### 2.4 等高线可视化效果
+
+```
+SGD（无动量）：       Momentum（0.9）：
+   ╱╲                    ╱╲
+ ╱    ╲               ╱    ╲
+╱      ╲             ╱      ╲
+ 震荡大，收敛慢        平滑快速到达最小值
+```
+
+---
+
+## 📌 三、学习率衰减（Learning Rate Decay）
+
+### 3.1 为什么需要学习率衰减？
+
+动量法有个问题：**容易冲过头**。一开始步子大没问题，但快接近最小值时还大步子就会来回震荡。
+
+> 💡 **思路**：训练初期用大学习率快速下降，后期用小学习率精细调整。
+
+### 3.2 PyTorch 的 LR Scheduler
+
+学习率衰减通过 `torch.optim.lr_scheduler` 实现，它和优化器**绑定使用**：
+
+```python
+optimizer = optim.SGD([params], lr=0.9)
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.7)
+```
+
+**使用流程**：
+
+```python
+for epoch in range(epochs):
+    # 1. 前向传播
+    loss = forward(x)
+    # 2. 反向传播
+    loss.backward()
+    # 3. 更新参数
+    optimizer.step()
+    # 4. 梯度清零
+    optimizer.zero_grad()
+    # 5. 更新学习率 ⭐
+    scheduler.step()
+```
+
+### 3.3 三种衰减策略
+
+#### (1) StepLR — 等间隔衰减
+
+每隔固定的步数，学习率乘以 gamma：
+
+```python
+scheduler = StepLR(optimizer, step_size=20, gamma=0.7)
+# 每 20 轮：lr = lr × 0.7
+```
+
+```
+学习率变化：阶梯状下降
+lr
+│
+│   ████
+│       ████
+│           ████
+│               ████
+└───────────────────→ epoch
+    20    40    60
+```
+
+#### (2) MultiStepLR — 指定间隔衰减
+
+在指定的轮次衰减：
+
+```python
+scheduler = MultiStepLR(optimizer, milestones=[50, 100, 200], gamma=0.7)
+# 在第 50、100、200 轮时：lr = lr × 0.7
+```
+
+```
+学习率变化：不等宽台阶
+lr
+│
+│   ████████████
+│               ██████████████
+│                             ██████████████████████
+└───────────────────────────────────→ epoch
+    50          100             200
+```
+
+#### (3) ExponentialLR — 指数衰减
+
+**每轮**都衰减：
+
+```python
+scheduler = ExponentialLR(optimizer, gamma=0.99)
+# 每轮：lr = lr × 0.99
+```
+
+```
+学习率变化：平滑曲线
+lr
+│
+│   ╲
+│    ╲
+│     ╲
+│      ╲
+└───────────────────→ epoch
+```
+
+> ⚠️ ExponentialLR 的 gamma 要接近 1（如 0.99），否则学习率会太快衰减到 0。
+
+### 3.4 查看当前学习率
+
+```python
+current_lr = optimizer.param_groups[0]['lr']
+```
+
+---
+
+## 📌 四、自适应学习率（AdaGrad / RMSProp）
+
+前面三种衰减策略是**固定的**（不管梯度多大，到了轮次就衰减）。那有没有一种方法让学习率**根据梯度自动调整**呢？
+
+### 4.1 AdaGrad
+
+**核心思路**：对每个参数单独调整学习率——历史上梯度大的参数，学习率衰减更快。
+
+```
+H = H + g²                       ← 历史梯度平方和累积
+w = w - lr / √(H + ε) × g        ← 梯度大 → 分母大 → 步长小
+```
+
+**优点**：每个参数自适应，适合稀疏数据
+**缺点**：H 只增不减，学习率会**单调衰减到 0**
+
+```python
+optimizer = optim.Adagrad([params], lr=0.9)
+```
+
+### 4.2 RMSProp
+
+**改进点**：用**指数移动平均**代替简单的平方和累加，不再单调衰减。
+
+```
+H = α × H + (1-α) × g²          ← 指数移动平均（α=0.99）
+w = w - lr / √(H + ε) × g
+```
+
+- 越久远的梯度权重越小
+- 学习率不会衰减到 0
+
+```python
+optimizer = optim.RMSprop([params], lr=0.1, alpha=0.99)
+```
+
+### AdaGrad vs RMSProp 对比
+
+| 对比维度 | AdaGrad | RMSProp |
+|---------|:------:|:-------:|
+| **H 的计算** | 简单累加 g² | 指数移动平均 |
+| **学习率** | 单调衰减到 0 ❌ | 不会衰减到 0 ✅ |
+| **适用场景** | 稀疏数据 | 通用 |
+| **超参数** | 无额外参数 | alpha（默认 0.99） |
+
+---
+
+## 📌 五、Adam 与 AdamW（工程首选）
+
+### 5.1 Adam = Momentum + RMSProp
+
+Adam 融合了两种思想：
+- **动量法**：累积历史梯度（一阶矩估计）
+- **RMSProp**：自适应学习率（二阶矩估计）
+
+```
+m = β₁ × m + (1-β₁) × g          ← 动量项（一阶矩）
+v = β₂ × v + (1-β₂) × g²         ← 自适应项（二阶矩）
+
+# 偏差修正（解决初始偏差）
+m_hat = m / (1 - β₁ᵗ)
+v_hat = v / (1 - β₂ᵗ)
+
+w = w - lr × m_hat / (√(v_hat) + ε)
+```
+
+**默认超参数**（原始论文推荐，基本不用改）：
+
+| 参数 | 默认值 | 含义 |
+|------|:-----:|------|
+| **lr** | 0.001 | 学习率 |
+| **betas** | (0.9, 0.999) | β₁（动量系数）, β₂（自适应系数） |
+| **eps** | 1e-8 | 防止除零 |
+
+```python
+optimizer = optim.Adam([params], lr=0.001)
+# 使用默认的 betas=(0.9, 0.999)
+```
+
+> ⭐ **Adam 几乎可以直接用默认参数**，不需要像 SGD 那样精细调参。这就是它成为"工程首选"的原因。
+
+### 5.2 AdamW — Adam 的正确权值衰减
+
+**为什么需要 AdamW？**
+
+`weight_decay`（权值衰减/正则化）是每个优化器都有的参数：
+
+```python
+optimizer = optim.Adam([params], lr=0.001, weight_decay=0.01)
+```
+
+但 Adam 的实现方式有问题：权值衰减被加到了梯度里，然后参与了 Adam 的自适应计算，导致**学习率衰减加速**，效果打了折扣。
+
+**AdamW 的改进**：把权值衰减从梯度计算中分离出来，直接作用在参数更新上：
+
+```
+标准 Adam：   梯度 = 原始梯度 + weight_decay × w       ← 参与自适应
+AdamW：       参数更新 = Adam更新 - lr × weight_decay × w  ← 独立处理
+```
+
+```python
+# 官方推荐使用 AdamW 替代 Adam
+optimizer = optim.AdamW([params], lr=0.001, weight_decay=0.01)
+```
+
+> 📌 PyTorch 官方从 2019 年起推荐使用 **AdamW 替代 Adam**。
+
+### 5.3 Adam vs SGD 可视化对比
+
+```
+等高线下降轨迹：
+
+SGD（lr=0.9）：     震荡大，但若调参精细也能收敛
+    ╱╲╱╲╱╲
+
+Momentum（0.9）：   平滑快速，但可能冲过
+    ╱╲__╱╲__╱
+
+Adam（lr=0.001）：  快速平滑到达，默认参数就表现优秀
+    ╱_____╱___
+
+AdamW：            与 Adam 类似（无 weight_decay 时几乎一样）
+```
+
+---
+
+## 📝 本章总结 + 选择指南
+
+### 🌳 知识树
+
+```
+优化方法（Optimizers）
+│
+├── ① SGD（基础）
+│   └── +Momentum → 加速收敛、减缓震荡
+│
+├── ② 学习率衰减（LR Scheduler）
+│   ├── StepLR → 等间隔阶梯下降
+│   ├── MultiStepLR → 指定节点下降
+│   └── ExponentialLR → 平滑指数衰减
+│
+├── ③ 自适应学习率
+│   ├── AdaGrad → 历史梯度平方和（单调衰减 ❌）
+│   └── RMSProp → 指数移动平均（不衰减 ✅）
+│
+└── ④ Adam / AdamW ⭐（融合动量+自适应）
+    ├── Adam → 工程首选，默认参数就表现优秀
+    └── AdamW → 正确的权值衰减，官方推荐
+```
+
+### 🚀 优化器选择速查
+
+| 场景 | 推荐优化器 | 学习率 |
+|------|:---------:|:-----:|
+| **快速实验/默认选择** | **Adam** ✅ | 0.001 |
+| **需要权值衰减（正则化）** | **AdamW** ✅ | 0.001 |
+| **数据稀疏（NLP/推荐）** | **Adam** ✅ | 0.001 |
+| **CV 领域/精细调参** | SGD + Momentum | 0.01~0.1 |
+| **需要自适应学习率** | RMSProp | 0.001~0.1 |
+
+### ⭐ 经验法则
+
+> **对于初学者和大多数工程任务：**
+> 1. 首先用 **Adam**（默认学习率 0.001）
+> 2. 需要正则化时换成 **AdamW**
+> 3. 如果追求极致效果，再精调 **SGD + Momentum**
+>
+> **关于学习率衰减：**
+> - Adam 自身已有自适应机制，通常**不需要额外加 LR Scheduler**
+> - SGD/Momentum 配合 LR Scheduler 效果更好
