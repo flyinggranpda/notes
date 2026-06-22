@@ -98,11 +98,12 @@ import torch
 import torch.nn as nn
 
 # ========== 1. 定义数据 ==========
-X = torch.tensor(10.0)        # 输入（标量）
-Y = torch.tensor(3.0)         # 真实标签
+X = torch.tensor([[10.0]])        # 输入 ⭐ 形状 (1,1) ← 和 W, Z 保持一致
+Y = torch.tensor([[3.0]])         # 真实标签 ⭐ 形状 (1,1) ← 和 Z 保持一致
 
 # 输入数据不需要梯度 ❌
 print(f"X.requires_grad: {X.requires_grad}")   # False
+print(f"X.shape: {X.shape}")                    # torch.Size([1, 1])
 
 # ========== 2. 初始化参数 ==========
 W = torch.randn(1, 1, requires_grad=True)      # 权重 ← 需要梯度 ✅
@@ -112,14 +113,15 @@ print(f"W.requires_grad: {W.requires_grad}")   # True
 print(f"B.requires_grad: {B.requires_grad}")   # True
 
 # ========== 3. 前向传播 ==========
-Z = W * X + B                 # 线性模型：ŷ = Wx + b
+Z = W @ X + B                 # ⭐ 矩阵乘法 @：线性模型 ŷ = Wx + b
 print(f"Z: {Z}")
+print(f"Z.shape: {Z.shape}")                    # torch.Size([1, 1]) ← 和 X, Y 一致 ✅
 print(f"Z.requires_grad: {Z.requires_grad}")   # True ← 自动开启
 print(f"Z.grad_fn: {Z.grad_fn}")                # <AddBackward0>
 
 # ========== 4. 计算损失 ==========
 loss_fn = nn.MSELoss()        # 均方误差损失函数
-loss = loss_fn(Z, Y)          # 计算损失值
+loss = loss_fn(Z, Y)          # 计算损失值 ⭐ Z(1,1) 和 Y(1,1) 形状一致 ✅
 print(f"loss: {loss}")
 print(f"loss.requires_grad: {loss.requires_grad}")   # True
 print(f"loss.grad_fn: {loss.grad_fn}")                # <MseLossBackward0>
@@ -174,16 +176,16 @@ print(f"B.grad: {B.grad}")    # 偏置 B 的梯度
 import torch
 import torch.nn as nn
 
-# 1. 数据
-X = torch.tensor(10.0)
-Y = torch.tensor(3.0)
+# 1. 数据 ⭐ 统一用 (1,1) 形状
+X = torch.tensor([[10.0]])   # (1,1)
+Y = torch.tensor([[3.0]])    # (1,1)
 
 # 2. 参数（开启梯度）
 W = torch.randn(1, 1, requires_grad=True)
 B = torch.randn(1, 1, requires_grad=True)
 
 # 3. 前向传播
-Z = W * X + B
+Z = W @ X + B                # ⭐ 矩阵乘法 @ 结果 (1,1) ← 和 Y 一致 ✅
 
 # 4. 损失
 loss_fn = nn.MSELoss()
@@ -242,7 +244,57 @@ loss.backward()               # 再次反向传播
 print(f"第2次: W.grad = {W.grad}")  # 梯度累积了！翻倍了？！
 ```
 
-**所以每次迭代前需要清零：**
+#### 为什么 PyTorch 选择不清零？
+
+这不是疏忽，而是**有意为之**，有两个原因：
+  
+**原因 ①：为了支持"梯度累积"技巧**
+
+有时候显存不够一次喂太多数据，可以**分批次算梯度，累加起来再一次性更新参数**：
+
+```python
+# 显存不够，分 4 个小批次
+for i in range(4):
+    x_batch = data[i * 8:(i + 1) * 8]    # 每次只喂 8 条
+    y_batch = label[i * 8:(i + 1) * 8]
+    
+    loss = model(x_batch, y_batch)
+    loss.backward()   # 梯度会累积到 W.grad 上 ↗️
+    # 这里不清零！
+
+# 累积了 4 次的梯度 → 等效于一次喂 32 条数据
+optimizer.step()      # 用累积的梯度更新一次参数
+optimizer.zero_grad() # 清空，准备下一轮
+```
+
+> 就像**往桶里接水**——backward 是"倒一杯水"，倒 4 次后桶里有 4 杯，最后一次性更新。如果每次自动清零，这个技巧就用不了。
+
+**原因 ②：PyTorch 的设计哲学——显式优于隐式**
+
+```python
+# TensorFlow 的做法：自动清零（隐式）
+optimizer.minimize(loss)  # 梯度算完自动清，你没得选
+
+# PyTorch 的做法：手动清零（显式）
+loss.backward()            # 梯度累积
+optimizer.step()           # 更新参数
+optimizer.zero_grad()      # 手动清 ← 让你意识到这步的存在
+```
+
+PyTorch 希望开发者**明确知道**自己什么时候该清零，而不是框架替你决定。
+
+#### 每次迭代前必须清零
+
+大多数情况下，你并不需要累积梯度，所以训练循环的标准写法是：
+
+```python
+for epoch in range(epochs):
+    for batch in dataloader:
+        optimizer.zero_grad()       # ← 不清就废了！梯度会翻倍累积
+        loss = model(batch)
+        loss.backward()
+        optimizer.step()
+```
 
 ```python
 # 清空梯度（训练循环中标准做法）
@@ -306,16 +358,16 @@ optimizer.zero_grad()         # 后面学优化器时再细讲
 import torch
 import torch.nn as nn
 
-# ① 定义数据
-X = torch.tensor(10.0)
-Y = torch.tensor(3.0)
+# ① 定义数据 ⭐ (1,1) 形状，与 Z 保持一致
+X = torch.tensor([[10.0]])   # (1,1)
+Y = torch.tensor([[3.0]])    # (1,1)
 
 # ② 初始化参数（开启梯度）
 W = torch.randn(1, 1, requires_grad=True)
 B = torch.randn(1, 1, requires_grad=True)
 
 # ③ 前向传播
-Z = W * X + B
+Z = W @ X + B                # ⭐ 矩阵乘法 @  (1,1)
 loss_fn = nn.MSELoss()
 loss = loss_fn(Z, Y)
 
@@ -677,16 +729,16 @@ PyTorch 自动微分（Autograd）
 import torch
 import torch.nn as nn
 
-# ① 定义数据
-X = torch.tensor(10.0)
-Y = torch.tensor(3.0)
+# ① 定义数据 ⭐ (1,1) 形状，与 Z 保持一致
+X = torch.tensor([[10.0]])   # (1,1)
+Y = torch.tensor([[3.0]])    # (1,1)
 
 # ② 初始化参数（开启梯度）
 W = torch.randn(1, 1, requires_grad=True)
 B = torch.randn(1, 1, requires_grad=True)
 
 # ③ 前向传播
-Z = W * X + B
+Z = W @ X + B
 loss_fn = nn.MSELoss()
 loss = loss_fn(Z, Y)
 

@@ -1,0 +1,201 @@
+NLP10_ NLP--
+AI · 
+
+ NLP10_NLP-- AI
+
+ · 
+
+  AI / LLM     
+
+ Atte=ntion T=ransform=er()  (HF)   4~5 
+
+Day1 --  · 30%
+
+ BPE  LLM 
+
+                   
+                    NLP 
+NLP  /             DL 
+                   LLM GPT/LLaMABPE
+_                  
+                   
+_BPE               
+
+__jieba          
+
+Word2Vec /       
+
+                 
+
+  BPE 
+Day2 -- RNN  · 40%
+
+  Transformer 
+
+                                    
+                                    
+RNN_                                
+                                    
+RNN_                                 RNN
+                                    
+RNN_ /                              RNN ELMo 
+                       
+RNN_API /              
+
+_              
+
+               
+
+ RNN + RNN   Attention/Transformer
+
+Day3~6 -- RNN + LSTM + Seq2Seq 
+
+  NLP AI 
+
+Day                  
+
+Day3 RNN_   
+
+Day4 LSTM  +       LSTM
+
+Day5 LSTM          
+
+Day6 Seq2Seq       AttentionSeq2Seq
+Day7 -- Attention   · 100%
+
+ TransformerAttentionTransformer
+
+                   
+Seq2Seq_
+Attention_          Attention
+
+Attention_        
+
+Attention _                 
+Attention _ / 
+                   //
+                  
+
+                    Attention
+
+                    
+
+                    
+
+Day8 -- Transformer   · 100%
+
+ DayTransformer = LLM
+                                
+
+Attention_                       Self-Attention
+
+Transformer_     
+
+Transformer_                     - 
+
+__QKV            QKV LLM
+
+__                
+
+__                              
+
+__                              
+
+_                               MHA = LLMMHA/GQA
+
+_                                FFN  + 
+
+_                               
+
+_                               
+
+_                                RoPE 
+
+Day9 -- Transformer  +   · 80%
+                          
+_
+                          -
+_Mask 
+_                                  
+
+                            = GPT
+Transformer_API /  / 
+Transformer _              
+
+                          
+
+                                   
+
+                          API PyTorchnn.Transformer
+
+                           
+
+Day10 --  
+
+ NLP
+
+Day11 --  + HuggingFace  · 100%
+
+ AIDay8HF
+                                  
+_HF_
+_HF_forward                       BERT/GPT
+HF-Tokenizer_
+HF-Tokenizer_                              
+HF-Datasets_
+HF-Datasets_ /  /DataLoader       HF
+
+                                           
+
+                                  Tokenizer = 
+
+                                           
+
+                                  
+
+                                           
+
+                                  
+
+                                   
+
+                                   HF
+
+Day12 --  · 50%
+
+                                   
+
+ /  /                              Day11
+                                   seq2seq
+BART                               
+
+ /  /                        
+
+ 
+ Day                             
+Day1  + 
+Day2 RNN                  30%   1   ~20min
+Day3~6 RNN/LSTM/Seq2Seq
+Day7 Attention            40%   2   ~40min
+Day8 Transformer
+Day9 Transformer+               0   0
+Day10 
+Day11 HuggingFace         100%  5   ~1.5h
+Day12 /
+                          100% 8~9  ~2.5h
+          
+                          80%   5   ~2h
+
+                                0   0
+
+                          100%  8   ~2.5h
+
+                          50%       ~1h
+
+                                ~30 ~3
+
+ 
+
+ 10_NLP/1./NLP1.0.2.docx 
+
+
