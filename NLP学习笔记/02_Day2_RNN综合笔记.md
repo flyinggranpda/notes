@@ -144,10 +144,13 @@ Wₕₕ 的形状:  (4, 4)    ← 4 维隐藏状态到 4 维隐藏状态
 b 的形状:    (4,)
 
 计算过程:
-Wₓₕ · xₜ      → (4,3)×(3,) → (4,)
-Wₕₕ · hₜ₋₁    → (4,4)×(4,) → (4,)
-相加 + b       → (4,)
-tanh           → (4,) = hₜ
+Wₓₕ @ xₜ      → (4,3)×(3,) → (4,)    ✦ 矩阵×向量（内部是逐行点积）
+Wₕₕ @ hₜ₋₁    → (4,4)×(4,) → (4,)    ✦ 矩阵×向量
+相加 + b       → (4,)                  ✦ 向量加法
+tanh           → (4,) = hₜ             ✦ 逐元素激活
+
+注：这里的运算不是哈达玛积（逐元素乘），每次要同时算 hidden_size 个不同的"映射"。
+如果用哈达玛积，形状必须相同，且每个维度只跟同维度交互，那学不到跨维度的特征。
 ```
 
 ---
@@ -393,6 +396,26 @@ rnn = nn.RNN(
 隐藏状态 hₙ: (num_layers * num_directions, batch_size, hidden_size)
 ```
 
+#### 🤔 直观理解：与线性回归对比
+
+线性回归 `Y = WX + B` 中，`X` 的形状是 `(m, n)`，其中：
+- **m** = 样本数（案例数）
+- **n** = 特征数（每个样本用几个数值描述）
+
+RNN 的输入 `(batch_size, seq_len, input_size)` 可以类比理解：
+
+| RNN 参数 | 类比线性回归 | 含义 |
+|----------|-------------|------|
+| **batch_size** | ↔ **m**（样本数） | 一次处理多少条独立序列 |
+| **seq_len** | ✨ **新增维度**（时间步） | 每条序列展开成多长（几句话，一句话有几个词、几天的股价） |
+| **input_size** | ↔ **n**（特征数） | 每个时间步用几个数值描述 |
+
+**关键区别**：线性回归是"一个样本 → 一个输出"的扁平映射；RNN 多了一个**时间轴**，每个样本本身是一条序列 `[x₁, x₂, ..., x_T]`，模型沿着时间步逐个读取。相当于把线性回归的每个"案例"从单个点展开成一条时间线。
+
+> 例：情感分析，一条评论 padding 到 10 个词，每个词用 300 维词向量表示
+> → `(batch_size=32, seq_len=10, input_size=300)`
+> → 32 条评论，每条 10 个时间步，每步 300 个特征
+
 ### 默认方式：`batch_first=False`
 
 ```
@@ -428,6 +451,91 @@ rnn = nn.RNN(
 - 所有层的**最后一个时间步**隐藏状态
 - `num_layers * num_directions`行：第 1 层正向、第 1 层反向（如双向）、第 2 层正向……
 - 常用 hₙ[-1, :, :] 取最后一层的最后一个时间步
+
+### 常见疑问
+
+#### ❓ 同一个 batch 里的句子必须等长吗？
+
+**批量训练时：必须等长**。PyTorch 张量要求矩形结构，`(batch_size, seq_len, input_size)` 中所有序列的 `seq_len` 必须一致。
+
+但自然语言天然是变长的：
+
+| 场景 | 需要等长？ | 如何处理 |
+|------|-----------|---------|
+| **单条推断** | ❌ 不需要 | 任意长度直接输入 |
+| **批量训练** | ✅ 张量要求矩形 | Padding（填充）+ pack_padded_sequence |
+
+**Padding 策略**：将短句子补上 `<PAD>` 标记到 batch 内最长句子的长度。
+
+```
+原始：
+  "I love NLP"                          → [I, love, NLP]
+  "I love natural language processing"  → [I, love, natural, language, processing]
+
+Padding 后（补 <PAD> 到最长长度）：
+  [I, love, NLP, <PAD>, <PAD>]            ← seq_len=5
+  [I, love, natural, language, processing] ← seq_len=5
+```
+
+但 padding 会引入噪声，所以需要配合 **`pack_padded_sequence`** 告诉 RNN 忽略 <PAD> 位置：
+
+```python
+# 1. 按真实长度排序，padding
+# 2. pack 压缩成变长格式
+packed_input = nn.utils.rnn.pack_padded_sequence(padded_input, lengths, batch_first=True)
+# 3. RNN 处理时自动跳过 padding 位置
+packed_output, h_n = rnn(packed_input)
+# 4. 解压回普通张量
+output, _ = nn.utils.rnn.pad_packed_sequence(packed_output, batch_first=True)
+```
+
+#### ❓ `seq_len` 在初始化时该如何确定？取最长的吗？
+
+**关键理解：`seq_len` 不是模型参数，是输入数据的形状决定的。**
+
+```python
+rnn = nn.RNN(input_size=300, hidden_size=128, num_layers=2)  # ✅ 没有 seq_len！
+```
+
+`nn.RNN` 的构造函数里**不需要**传 `seq_len`，它是每次前向传播时由输入 tensor 的形状动态决定的。
+
+实际项目中通常有三种策略：
+
+| 方案 | 做法 | 适用场景 |
+|-----|------|---------|
+| **① 逐 batch padding** | 每个 batch 各自 pad 到该 batch 的最长值 | 数据长短差异大，追求召回 |
+| **② 全局固定长度** | 统计长度分布，取 95% 分位数作为 `MAX_SEQ_LEN`，超出截断、不足 padding | 大多数工业项目 |
+| **③ Bucket batching** | 按长度分桶，同桶内长度相近再 padding | 追求训练效率 |
+
+**方案 ② 详解（最常用 ✅）**：
+
+```python
+MAX_SEQ_LEN = 128  # 超参，根据数据分布选
+
+if len(tokens) > MAX_SEQ_LEN:
+    tokens = tokens[:MAX_SEQ_LEN]   # 截断
+else:
+    tokens = tokens + [PAD] * (MAX_SEQ_LEN - len(tokens))  # 填充
+```
+
+如何选这个值？先画出数据集的句子长度分布，取 95% 或 99% 分位数：
+
+```
+句子长度分布：
+  ████████████████████████░░░░░   ← 95% 的句子 ≤ 64 词
+  0                        64  128
+                           ↑
+                        选 64，只牺牲尾部 5% 的极长句，但节省大量计算
+```
+
+**方案 ③ 示意**：
+
+```
+桶1 (len 1-5):  ["你好", "我爱NLP", "今天天气好"]     → pad 到 5
+桶2 (len 6-10): ["我非常喜欢自然语言处理", ...]        → pad 到 10
+```
+
+既满足张量矩形要求，又避免短句子填充过多无意义的 `<PAD>`。
 
 ---
 
