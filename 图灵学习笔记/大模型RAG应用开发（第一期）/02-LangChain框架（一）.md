@@ -353,7 +353,6 @@ def extract_text_from_pdf(pdf_path, max_pages=3):
     
     return text
 
-
 def split_text(text, chunk_size=200, overlap=50):
     """重叠分割文本"""
     chunks = []
@@ -362,7 +361,6 @@ def split_text(text, chunk_size=200, overlap=50):
         if len(chunk) >= chunk_size - overlap:
             chunks.append(chunk)
     return chunks
-
 
 def split_sentences(text):
     """按句子分割（按句号、问号、感叹号）"""
@@ -765,12 +763,6 @@ print(response['result'])
 | **Retriever** | 从向量数据库搜索相关文档 |
 | **Callback** | 成功/失败后的处理回调 |
 
-### 下节课预告
-
-- Agent（智能代理）详解
-- LangGraph（图状流程）
-- 更复杂的 RAG 优化
-
 ---
 
 > **费曼学习法复习：** 假装你要给一个刚学 Python 的朋友讲这节课的内容——
@@ -782,3 +774,4 @@ print(response['result'])
 ---
 
 *笔记整理于 2026-06-30 · 图灵 Python 课堂 · 基于课程 2-LangChain框架-2025-5-28*
+

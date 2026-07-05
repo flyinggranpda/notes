@@ -598,13 +598,6 @@ for doc in results:
 | 加载 PDF | 自己解析 | `PyPDFLoader` 3 行 |
 | 创建 Agent | — | `create_openai_functions_agent()` 3 行 |
 
-### 下节课预告
-
-- Chain（链）的原理——为什么都用 `invoke`？
-- Agent 进阶
-- Tools（工具）的使用
-- Memory（记忆）
-
 ---
 
 > **费曼复习：** 用一句话说明 Agent 和 Function Call 的区别给非技术朋友听——
@@ -613,3 +606,4 @@ for doc in results:
 ---
 
 *笔记整理于 2026-06-30 · 图灵 Python 课堂 · 基于课程 3-LangChain框架-2-2025-6-4*
+
