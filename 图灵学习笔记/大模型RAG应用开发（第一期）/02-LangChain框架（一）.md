@@ -1,5 +1,7 @@
 # 🧩 LangChain 框架 & RAG 实战 — 费曼学习笔记
 
+> 📝 **文档摘要：** 本文深入讲解 LangChain 框架与 RAG 实战。首先回顾 RAG 流程和向量数据库概念，通过 Chroma DB 的完整增删改查代码演示向量数据库操作。然后对比在线平台（Coze/Dify）与手写代码的优缺点，并手写一个完整的 RAG 项目（PDF读取→文本分割→向量化→存储→检索→回答），约 150 行代码。接着介绍 LangChain 框架的核心组件（Model I/O、Chains、Memory、Agents、Callbacks），并通过实战演示模型调用、提示词模板（PromptTemplate）、输出解析器（JsonOutputParser）以及用 LangChain 一行代码完成向量存储和 RAG 链组装（RetrievalQA），从 150 行手写代码降至约 30 行。
+
 > 课程来源：图灵 Python · 柏汌/百川老师  
 > 学习日期：2025-05-28  
 > 上节课：[RAG 基础](RAG基础-学习笔记.md)

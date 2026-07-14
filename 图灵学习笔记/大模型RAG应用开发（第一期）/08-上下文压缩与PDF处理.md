@@ -1,5 +1,7 @@
 # 🔧 上下文压缩与 PDF 高级处理
 
+> 📝 **文档摘要：** 本文讲解 RAG 后索引的关键技术——上下文压缩，以及 PDF 复杂文档处理。上下文压缩部分介绍其核心思路（过滤不相关文档 + 精简冗余内容），通过对比演示说明有无压缩的效果差异，详细分析三种压缩策略（LLMChainExtractor 精度最高但最贵、LLMChainFilter 快速过滤、EmbeddingsFilter 最轻量），并提供压缩成本与收益的权衡分析（LLM 调用次数、token 消耗、耗时对比）。PDF 高级处理部分聚焦表格识别难题，介绍 pdfplumber 和 unstructured 等工具的使用，以及摘要索引和多级检索架构（先检索摘要再取原文）。最后给出高级 RAG 完整技术栈回顾和推荐的技术采用路径（RRF → EmbeddingsFilter → LLMChainFilter → LLMChainExtractor）。
+
 > 🎯 第 9 课补全了后索引的最后一块拼图：上下文压缩  
 > 🎯 同时深入讲解了 PDF 中的表格识别等复杂文档处理  
 > 💻 注重实战代码，解决真实场景中的文档处理难题

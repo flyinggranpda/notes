@@ -1,5 +1,7 @@
 # 🧩 LangChain 框架深入（二）— 费曼学习笔记
 
+> 📝 **文档摘要：** 本文深入讲解 LangChain 的 Agent 机制与 Model I/O 深度拆解。首先通过"手与工具"的比喻清晰区分 Agent 与 Function Call，并通过完整代码实战演示 Agent 创建流程（创建检索工具→加载提示词模板→创建大模型→创建 Agent→执行提问）。然后介绍 LangChain Hub 提示词模板市场的使用。接着深度拆解 Model I/O 三件套：PromptTemplate 的三种用法（字符串/聊天/Few-shot）、模型三兄弟（LLM vs ChatModel vs Embedding）、OutputParser 让模型按 JSON 格式输出。最后完整讲解数据检索管线（文档加载→文本分割→向量化→存储→检索器），并对比手写代码与 LangChain 的代码量差异。
+
 > 课程来源：图灵 Python · 柏汌/百川老师  
 > 学习日期：2025-06-04  
 > 上一课：[LangChain 框架（一）](LangChain框架-学习笔记.md)

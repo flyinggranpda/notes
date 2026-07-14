@@ -1,5 +1,7 @@
 # 🧩 LangChain 框架深入（三）— 费曼学习笔记
 
+> 📝 **文档摘要：** 本文深入讲解 LangChain 的 Chain 机制、Runnable 统一接口以及高级 Agent 和 Memory。首先揭示为什么所有组件都用 `.invoke()` 调用（Runnable 统一接口），并通过 LCEL 管道符 `|` 讲解组件串联原理。通过完整的旅游助手案例演示 RunnableParallel（并行执行）、RunnableBranch（条件分支）的实战应用。然后介绍 Agent 进阶能力（Self-Reflection/Self-Ask），详解 Tools 的核心属性与三种自定义工具方式（@tool 装饰器/Tool.from_function/StructuredTool）。接着讲解 Memory 记忆机制的本质——将历史对话拼到提示词中，并分别演示简单实现、RunnableWithMessageHistory 用法和 JSON 持久化存储。最后提供 LangChain 全系列知识体系总结回顾。
+
 > 课程来源：图灵 Python · 柏汌/百川老师  
 > 学习日期：2025-06-08 ~ 2025-06-11  
 > 上一课：[LangChain 框架深入（二）](LangChain框架深入(二)-学习笔记.md)
