@@ -8,39 +8,42 @@ This is a **personal AI/ML learning notes repository**. It is not a software pro
 
 ## Git Workflow
 
-- `图灵/` (raw PDFs, extracted .txt subtitles) is **gitignored** — only committed notes live in `图灵学习笔记/`
+- `图灵/` (raw PDFs, extracted .txt subtitles) is **gitignored** — only committed notes live in `AI/图灵学习笔记/`
 - Commit convention: `docs(notes): <description>` with footer `Co-Authored-By: Claude <noreply@anthropic.com>`
 
 ## Directory Structure
 
 ```
 notes/
+├── 📈 投资/
+│   ├── 21位游资悟道心法/           # 21 traders — trading psychology & techniques
+│   └── 期权入门学习笔记（三讲合集）.md
+│
+├── 🤖 AI/
+│   ├── 图灵学习笔记/               # 🎯 Organized notes from 图灵 courses
+│   │   ├── 大模型RAG应用开发（第一期）/  # 10 chapters — RAG基础 → LangChain → Advanced RAG → 项目
+│   │   ├── Agent应用开发/              # 3 notes — Agent 1/2/3 (智能体开发)
+│   │   ├── 大模型面试/                 # 23 notes — Transformer各组件 + PEFT/RLHF/量化
+│   │   └── 大模型私有化微调/            # 12 organized + 9 raw subtitle extracts
+│   ├── NLP学习笔记/                   # NLP fundamentals — RNN, Attention (尚硅谷)
+│   ├── PyTorch学习笔记/               # PyTorch from scratch — 张量 → Autograd → 损失函数 → 优化器
+│   ├── 深度学习笔记_PyTorch完整版.md    # Standalone deep learning reference
+│   ├── 深度学习_矩阵求导笔记.md
+│   └── 深度学习笔记_反向传播与计算图.md
+│
 ├── 图灵/                          # 🔒 Raw course materials (gitignored)
 │   ├── RAG应用开发/                # 12 PDFs — RAG → LangChain → RAG进阶 → 项目实战 (柏汌)
 │   ├── Agent应用开发/              # 3 PDFs — Agent智能体 1/2/3 (初见)
 │   ├── 大模型面试/                 # 23 PDFs — Transformer/PEFT/RLHF/量化 (面试向)
 │   └── 大模型私有化微调/            # 9 PDFs — 微调101 → LoRA → 量化 → 多模态 → 最佳实践 → 项目 (陈钢)
 │
-├── 图灵学习笔记/                   # 🎯 Organized notes from all 图灵 courses (tracked in git)
-│   ├── 大模型RAG应用开发（第一期）/  # 10 chapters — RAG基础 → LangChain → Advanced RAG → 项目
-│   ├── Agent应用开发/              # 3 notes — Agent 1/2/3 (智能体开发)
-│   ├── 大模型面试/                 # 23 notes — Transformer各组件 + PEFT/RLHF/量化
-│   └── 大模型私有化微调/            # 6 notes (so far) — 微调101 → PEFT → 量化+多模态
-│
-├── NLP学习笔记/                   # NLP fundamentals — RNN, Attention, 中英翻译案例 (尚硅谷)
-├── PyTorch学习笔记/               # PyTorch from scratch — 张量 → Autograd → 损失函数 → 优化器
-│
-├── 21位游资悟道心法/              # Stock market / trading psychology (21 traders)
-│
-├── 深度学习笔记_PyTorch完整版.md    # Standalone deep learning reference (PyTorch)
-├── 深度学习_矩阵求导笔记.md
-├── 深度学习笔记_反向传播与计算图.md
-└── 期权入门学习笔记（三讲合集）.md
+├── CLAUDE.md, README.md
+└── .gitignore, .obsidian/ etc.
 ```
 
 ## Content Architecture
 
-### 图灵学习笔记 series (primary curriculum)
+### AI/图灵学习笔记 series (primary curriculum)
 
 Three parallel course tracks, all from 图灵教育:
 
@@ -55,9 +58,9 @@ Three parallel course tracks, all from 图灵教育:
 - PEFT/LoRA/RLHF系列 (Reward Hacking, 缩放定律, 剪枝/蒸馏, 正则化, 稀疏微调, 幻觉, 数据扩增)
 - 量化系列 (量化和二值化)
 
-**4. 大模型私有化微调** (陈钢) — 6 organized notes (9 lectures total):
-- 微调101 → PEFT/LoRA → 量化 → 多模态(CNN) → 多模态(Transformer)
-- Raw subtitles fully cleaned for lectures 1-9, organized notes ready for 1-6
+**4. 大模型私有化微调** (陈钢) — 12 organized notes (1-12) + 9 raw subtitle extracts (1-9):
+- 微调101 → PEFT/LoRA → 量化 → 多模态(CNN) → 多模态(Transformer) → 最佳实践 → 实战项目
+- Organized notes for lectures 1-6, 10-12; raw subtitle `.md` extracts for all 1-9
 
 ### Note writing style (Feynman technique)
 - Explain concepts in plain language first, then formalize
@@ -65,7 +68,7 @@ Three parallel course tracks, all from 图灵教育:
 - Comparison tables for similar concepts (PTQ vs QAT, LoRA vs Adapter, etc.)
 - ASCII diagrams for workflows and model architectures
 - `费曼说：...` plain-language summaries at section ends
-- Every `.md` in 图灵学习笔记/ is human-edited — raw PDF subtitle extracts live in `图灵/` as `.txt`
+- Every `.md` in AI/图灵学习笔记/ is human-edited — organized notes and raw subtitle extracts both live here, separated from source PDFs/subtitles in `图灵/`
 
 ### Python packages commonly referenced
 - `chromadb`, `langchain`, `langchain-openai`, `langchain-community`
@@ -95,8 +98,8 @@ pdftotext -layout "图灵/<course>/<filename>.pdf" "图灵/<course>/<filename>.t
 ### Clean subtitle text into notes
 1. Extract raw text from PDF → `.txt` (in `图灵/`)
 2. Remove: song lyrics, speaker labels, timestamps, verbal repetitions, classroom management chatter
-3. Restructure into markdown with headings, tables, code blocks
-4. Save as `.md` under `图灵学习笔记/<course>/`
+3. Save cleaned subtitle as `.md` under `AI/图灵学习笔记/<course>/` (suffixed `_原文` if a human-edited version exists)
+4. Restructure into Feynman-style notes with headings, tables, code blocks — saved alongside the raw extract
 
 ## Environment
 - OS: Windows 11
